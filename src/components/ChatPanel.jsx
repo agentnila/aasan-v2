@@ -1,5 +1,28 @@
 import { useState, useRef, useEffect } from "react";
+import { useUser } from "@clerk/clerk-react";
 import MessageBubble from "./MessageBubble";
+
+const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
+const CLAUDE_MODEL = "claude-sonnet-4-5";
+const SYSTEM_PROMPT = `You are Peraasan, the AI learning agent inside Aasan — Your Personal University for enterprises.
+
+Your personality: warm, encouraging, concise, action-oriented. You are the employee's personal learning companion.
+
+What you do:
+- Help employees find and learn content from any source (Coursera, Confluence, Google Drive, LMS, YouTube, web)
+- Build personalised learning paths based on their goals and what they already know
+- Recommend what to learn next (always goal-anchored)
+- Track knowledge in a permanent knowledge graph (you never forget what they learned)
+- Schedule learning sessions ("Start now with just 5 minutes, or I can find calendar slots")
+- Review for retention (spaced review — "Remember Forever")
+
+Rules:
+- Keep responses under 150 words unless teaching a concept
+- Always tie recommendations back to their goal
+- When suggesting content, offer: "Start now (just 5 min) or schedule for later?"
+- Be encouraging but never annoying
+- If they seem stuck, use micro-commitments ("just read the first paragraph")
+- You are an agent that ACTS for them, not just answers questions`;
 
 function getInitialMessages(name) {
   return [
@@ -20,6 +43,7 @@ const QUICK_ACTIONS = [
 ];
 
 export default function ChatPanel({ onContextChange, userName }) {
+  const { user } = useUser();
   const [messages, setMessages] = useState(() => getInitialMessages(userName || 'there'));
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -29,7 +53,7 @@ export default function ChatPanel({ onContextChange, userName }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  function sendMessage(text) {
+  async function sendMessage(text) {
     if (!text.trim()) return;
 
     const userMsg = {
@@ -43,19 +67,60 @@ export default function ChatPanel({ onContextChange, userName }) {
     setInput("");
     setIsTyping(true);
 
-    // Simulate Peraasan response (will be Make.com → Claude in production)
-    setTimeout(() => {
-      const response = generateResponse(text.trim());
-      setMessages((prev) => [...prev, response]);
-      setIsTyping(false);
+    try {
+      // Build conversation history for Claude
+      const conversationHistory = messages.slice(-10).map((m) => ({
+        role: m.role === "peraasan" ? "assistant" : "user",
+        content: m.content,
+      }));
+      conversationHistory.push({ role: "user", content: text.trim() });
 
-      // Update context panel based on conversation
-      if (text.toLowerCase().includes("progress") || text.toLowerCase().includes("readiness")) {
-        onContextChange({ type: "progress" });
-      } else if (text.toLowerCase().includes("learn") || text.toLowerCase().includes("kubernetes") || text.toLowerCase().includes("next")) {
-        onContextChange({ type: "learning_path" });
+      // Call Claude API directly
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": CLAUDE_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: CLAUDE_MODEL,
+          max_tokens: 1024,
+          system: SYSTEM_PROMPT + `\n\nThe employee's name is ${userName || "there"}.`,
+          messages: conversationHistory,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const replyText = data.content?.[0]?.text || "I'm thinking about that...";
+        const peraasanMsg = {
+          id: Date.now() + 1,
+          role: "peraasan",
+          content: replyText,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, peraasanMsg]);
+      } else {
+        const fallback = generateResponse(text.trim());
+        setMessages((prev) => [...prev, fallback]);
       }
-    }, 1500);
+    } catch (err) {
+      console.log("Claude API unavailable, using simulated response:", err.message);
+      const fallback = generateResponse(text.trim());
+      setMessages((prev) => [...prev, fallback]);
+    }
+
+    setIsTyping(false);
+
+    // Update context panel based on conversation
+    const lower = text.toLowerCase();
+    if (lower.includes("progress") || lower.includes("readiness")) {
+      onContextChange({ type: "progress" });
+    } else if (lower.includes("learn") || lower.includes("kubernetes") || lower.includes("next")) {
+      onContextChange({ type: "learning_path" });
+    }
   }
 
   function generateResponse(text) {

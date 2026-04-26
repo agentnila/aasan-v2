@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import MessageBubble from "./MessageBubble";
 
-const INITIAL_MESSAGES = [
-  {
-    id: 1,
-    role: "peraasan",
-    content: "What do you want to learn today?",
-    timestamp: new Date(),
-  },
-];
+function getInitialMessages(name) {
+  return [
+    {
+      id: 1,
+      role: "peraasan",
+      content: `Good to see you, ${name}! What do you want to learn today?`,
+      timestamp: new Date(),
+    },
+  ];
+}
 
 const QUICK_ACTIONS = [
   "What should I learn next?",
@@ -17,8 +19,8 @@ const QUICK_ACTIONS = [
   "Review something",
 ];
 
-export default function ChatPanel({ onContextChange }) {
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+export default function ChatPanel({ onContextChange, userName }) {
+  const [messages, setMessages] = useState(() => getInitialMessages(userName || 'there'));
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const endRef = useRef(null);

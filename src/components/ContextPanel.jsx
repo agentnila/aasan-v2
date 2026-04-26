@@ -1,15 +1,23 @@
+import { useUser, UserButton } from '@clerk/clerk-react'
+
 export default function ContextPanel({ data }) {
+  const { user } = useUser()
+  const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Employee'
+  const initials = user ? (user.firstName?.[0] || '') + (user.lastName?.[0] || '') : 'U'
+
   return (
     <aside className="w-[320px] min-w-[320px] bg-white border-l border-gray-100 flex flex-col overflow-y-auto no-scrollbar">
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-columbia-blue/20 flex items-center justify-center text-navy text-xs font-semibold">
-            S
-          </div>
+          <UserButton
+            appearance={{
+              elements: { avatarBox: 'w-8 h-8' }
+            }}
+          />
           <div>
-            <p className="text-[12px] font-semibold text-text-primary">Sarah Chen</p>
-            <p className="text-[10px] text-gray-400">Sr. Software Engineer</p>
+            <p className="text-[12px] font-semibold text-text-primary">{displayName}</p>
+            <p className="text-[10px] text-gray-400">Learner</p>
           </div>
         </div>
       </div>

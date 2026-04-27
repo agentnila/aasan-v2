@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 import MessageBubble from "./MessageBubble";
-import { captureSession, completeReview } from "../services/api";
+import { captureSession, completeReview, addMemory, searchContent } from "../services/api";
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 const CLAUDE_MODEL = "claude-sonnet-4-5";
@@ -49,7 +49,30 @@ function buildSystemPrompt(userName, context) {
   return prompt;
 }
 
+const GOAL_ONBOARDING_GREETING = "Welcome to Aasan \u2014 your Personal University! I'm Peraasan, your AI learning agent. Before we start, let's set your learning goal. What do you want to achieve? It could be a certification, a skill, a promotion, or anything you're working toward.";
+
+const GOAL_FOLLOWUPS = [
+  (goal) => `Great goal! Why is "${goal}" important to you right now?`,
+  (_obj) => "When would you like to achieve this by?",
+  (_tl) => "How will you know you've succeeded? What's the success criteria?",
+];
+
+function isGoalSet() {
+  return localStorage.getItem('aasan_goal_set') === 'true';
+}
+
+function getSavedGoal() {
+  try {
+    return JSON.parse(localStorage.getItem('aasan_goal') || 'null');
+  } catch { return null; }
+}
+
 function getInitialGreeting(name, context) {
+  // If no goal is set, show onboarding greeting
+  if (!isGoalSet()) {
+    return GOAL_ONBOARDING_GREETING;
+  }
+
   if (!context) {
     return `Good to see you, ${name}! Loading your knowledge graph...`;
   }
@@ -83,6 +106,9 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [reviewMode, setReviewMode] = useState(null); // { concept, question, index }
+  // Goal onboarding: 0=ask goal, 1=ask why, 2=ask when, 3=ask criteria, 4=done
+  const [goalStep, setGoalStep] = useState(isGoalSet() ? 4 : 0);
+  const [goalData, setGoalData] = useState({ goal: '', objective: '', timeline: '', criteria: '' });
   const endRef = useRef(null);
   const contextLoadedRef = useRef(false);
 
@@ -287,6 +313,113 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
     }]);
   }
 
+  // Handle goal onboarding flow — returns true if intercepted
+  async function handleGoalOnboarding(text) {
+    if (goalStep >= 4) return false; // goal already set
+
+    const trimmed = text.trim();
+
+    if (goalStep === 0) {
+      // User just told us their goal
+      setGoalData(prev => ({ ...prev, goal: trimmed }));
+      setGoalStep(1);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: GOAL_FOLLOWUPS[0](trimmed),
+        timestamp: new Date(),
+      }]);
+      return true;
+    }
+
+    if (goalStep === 1) {
+      // User told us why
+      setGoalData(prev => ({ ...prev, objective: trimmed }));
+      setGoalStep(2);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: GOAL_FOLLOWUPS[1](trimmed),
+        timestamp: new Date(),
+      }]);
+      return true;
+    }
+
+    if (goalStep === 2) {
+      // User told us timeline
+      setGoalData(prev => ({ ...prev, timeline: trimmed }));
+      setGoalStep(3);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: GOAL_FOLLOWUPS[2](trimmed),
+        timestamp: new Date(),
+      }]);
+      return true;
+    }
+
+    if (goalStep === 3) {
+      // User told us criteria — finalize goal
+      const finalGoal = {
+        goal: goalData.goal,
+        objective: goalData.objective,
+        timeline: goalData.timeline,
+        criteria: trimmed,
+      };
+
+      // Save to localStorage
+      localStorage.setItem('aasan_goal', JSON.stringify(finalGoal));
+      localStorage.setItem('aasan_goal_set', 'true');
+      setGoalData(finalGoal);
+      setGoalStep(4);
+
+      // Save to Mem0
+      const uid = userId || user?.id;
+      if (uid) {
+        addMemory(uid, `Learning goal: ${finalGoal.goal}. Why: ${finalGoal.objective}. Timeline: ${finalGoal.timeline}. Success criteria: ${finalGoal.criteria}`).catch(err =>
+          console.error('[Goal] Failed to save to Mem0:', err.message)
+        );
+      }
+
+      const summary = `Perfect. Here's your goal:\n\n\ud83c\udfaf Goal: ${finalGoal.goal}\n\ud83d\udccc Why: ${finalGoal.objective}\n\ud83d\udcc5 By: ${finalGoal.timeline}\n\u2705 Success: ${finalGoal.criteria}\n\nI'll anchor everything I recommend to this. Let's start \u2014 what do you want to learn today?`;
+
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: summary,
+        timestamp: new Date(),
+      }]);
+      return true;
+    }
+
+    return false;
+  }
+
+  // Search content index, returns array of results or empty array
+  async function fetchContentResults(query) {
+    try {
+      const res = await searchContent(query);
+      const items = res?.results || res?.items || (Array.isArray(res) ? res : []);
+      return items;
+    } catch (err) {
+      console.log('[Content] Search failed:', err.message);
+      return [];
+    }
+  }
+
+  // Detect learning intent keywords
+  function hasLearningIntent(text) {
+    const lower = text.toLowerCase();
+    const keywords = ['learn', 'teach', 'study', 'how to', 'what is', 'explain', 'understand', 'tutorial', 'course'];
+    return keywords.some(k => lower.includes(k));
+  }
+
+  // Detect recommendation intent
+  function hasRecommendationIntent(text) {
+    const lower = text.toLowerCase();
+    return lower.includes('what should') || lower.includes('recommend') || lower.includes('learn next') || lower.includes('suggest');
+  }
+
   async function sendMessage(text) {
     if (!text.trim()) return;
 
@@ -299,6 +432,12 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+
+    // Goal onboarding intercept
+    if (goalStep < 4) {
+      const handled = await handleGoalOnboarding(text.trim());
+      if (handled) return;
+    }
 
     // Check if user wants to start review
     const lower = text.trim().toLowerCase();
@@ -324,7 +463,30 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
       }));
       conversationHistory.push({ role: "user", content: text.trim() });
 
-      const systemPrompt = buildSystemPrompt(userName, context);
+      let systemPrompt = buildSystemPrompt(userName, context);
+
+      // If user has a goal, include it in context
+      const savedGoal = getSavedGoal();
+      if (savedGoal) {
+        systemPrompt += `\n\nEmployee's goal: ${savedGoal.goal}. Why: ${savedGoal.objective}. Timeline: ${savedGoal.timeline}. Success criteria: ${savedGoal.criteria}.`;
+      }
+
+      // Task 2 & 3: Search content for recommendations or learning intent
+      let contentResults = [];
+      if (hasRecommendationIntent(text.trim()) || hasLearningIntent(text.trim())) {
+        const searchQuery = savedGoal ? `${text.trim()} ${savedGoal.goal}` : text.trim();
+        contentResults = await fetchContentResults(searchQuery);
+      }
+
+      if (contentResults.length > 0) {
+        systemPrompt += `\n\nAvailable content from the company's learning index (use these real titles, sources, and durations in your recommendations):\n`;
+        contentResults.slice(0, 5).forEach((item, i) => {
+          systemPrompt += `${i + 1}. "${item.title}" — Source: ${item.source}, Type: ${item.type || 'content'}, Duration: ${item.duration_minutes || '?'} min, Level: ${item.level || 'unknown'}${item.ai_summary ? `, Summary: ${item.ai_summary}` : ''}\n`;
+        });
+        systemPrompt += `\nReference these actual content items when making recommendations. Include the real title, source, and duration.`;
+      } else if (hasLearningIntent(text.trim())) {
+        systemPrompt += `\n\nNo indexed content matched this query. Use your own knowledge to help, and note: "I'll search your company's sources when they're connected."`;
+      }
 
       // Call Claude API directly
       const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -559,8 +721,8 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
         </div>
       </div>
 
-      {/* Quick actions */}
-      {messages.length <= 2 && (
+      {/* Quick actions — hidden during goal onboarding */}
+      {messages.length <= 2 && goalStep >= 4 && (
         <div className="px-6 pb-2">
           <div className="max-w-2xl mx-auto flex gap-2 overflow-x-auto no-scrollbar">
             {QUICK_ACTIONS.map((action) => (

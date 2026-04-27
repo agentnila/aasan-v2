@@ -1,5 +1,11 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 
+function getSavedGoal() {
+  try {
+    return JSON.parse(localStorage.getItem('aasan_goal') || 'null');
+  } catch { return null; }
+}
+
 export default function ContextPanel({ data, context, contextLoading }) {
   const { user } = useUser()
   const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Employee'
@@ -12,6 +18,9 @@ export default function ContextPanel({ data, context, contextLoading }) {
   const reviewsDue = context?.reviews_due || []
   // memories stored for Peraasan use
   const _memories = context?.memories || []
+
+  // Goal from localStorage (set during onboarding)
+  const savedGoal = getSavedGoal()
 
   return (
     <aside className="w-[320px] min-w-[320px] bg-white border-l border-gray-100 flex flex-col overflow-y-auto no-scrollbar">
@@ -35,18 +44,21 @@ export default function ContextPanel({ data, context, contextLoading }) {
       {/* Goal */}
       <div className="px-5 py-4 border-b border-gray-50">
         <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-2">CURRENT GOAL</p>
-        <p className="text-[13px] font-semibold text-text-primary">Cloud Architect</p>
-        <p className="text-[10px] text-gray-400 mt-0.5">By Q4 2026 · Pass AWS SA Pro</p>
-        <div className="flex items-center gap-2 mt-2.5">
-          <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-            <div className="bg-navy rounded-full h-2" style={{ width: "62%" }} />
-          </div>
-          <span className="text-[11px] font-bold text-navy">62</span>
-        </div>
-        <div className="flex items-center justify-between mt-1.5 text-[9px] text-gray-400">
-          <span>250 days left</span>
-          <span>↑ rising</span>
-        </div>
+        {savedGoal ? (
+          <>
+            <p className="text-[13px] font-semibold text-text-primary">{savedGoal.goal}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">By {savedGoal.timeline} · {savedGoal.criteria}</p>
+            <div className="flex items-center gap-2 mt-2.5">
+              <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="bg-navy rounded-full h-2" style={{ width: `${context?.readiness || 0}%` }} />
+              </div>
+              <span className="text-[11px] font-bold text-navy">{context?.readiness || 0}</span>
+            </div>
+            <p className="text-[9px] text-gray-400 mt-1.5">{savedGoal.objective}</p>
+          </>
+        ) : (
+          <p className="text-[10px] text-gray-400">No goal set yet — chat with Peraasan to set one</p>
+        )}
       </div>
 
       {/* Dynamic content based on conversation */}

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Gives Peraasan the ability to read web pages, navigate, and act on behalf of the learner.",
   "permissions": ["activeTab", "scripting", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },

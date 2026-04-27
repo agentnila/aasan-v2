@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useClerk } from "@clerk/clerk-react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import { seedDemoContent } from "../data/seedContent";
+import agent from "../services/agentService";
 
 const sources = [
   { name: "Coursera", icon: "C", color: "bg-blue-500", connected: true, items: 2400 },
@@ -18,9 +19,27 @@ export default function SourcesNav() {
   const [open, setOpen] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [seedDone, setSeedDone] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
   const connectedCount = sources.filter((s) => s.connected).length;
   const { openUserProfile, signOut } = useClerk();
+  const { user } = useUser();
   const isDev = import.meta.env.DEV;
+
+  async function handleCurrencyScan() {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const result = await agent.runCurrencyScan({
+        userId: user?.id || "demo-user",
+        maxConcepts: 5,
+      });
+      setScanResult(result);
+    } catch (err) {
+      setScanResult({ error: err.message });
+    }
+    setScanning(false);
+  }
 
   async function handleSeed() {
     setSeeding(true);
@@ -154,6 +173,90 @@ export default function SourcesNav() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* V3: Currency Watch — full agentic loop demo */}
+      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-purple-50/40 to-transparent">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+          <p className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ CURRENCY WATCH</p>
+        </div>
+        <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
+          Re-fetches your tracked sources via Perplexity Computer, classifies changes via Claude, surfaces what's substantive.
+        </p>
+        <button
+          onClick={handleCurrencyScan}
+          disabled={scanning}
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+            scanning
+              ? 'bg-purple-100 text-purple-400 cursor-wait'
+              : 'bg-purple-600 text-white hover:bg-purple-700'
+          }`}
+        >
+          {scanning ? '⚙ Scanning…' : '⚙ Run scan now'}
+        </button>
+
+        {scanResult && !scanResult.error && (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-baseline justify-between text-[10px]">
+              <span className="text-gray-500">{scanResult.concepts_scanned} concepts scanned</span>
+              <span className="font-mono text-purple-700">
+                {scanResult.notifications_count} notify
+              </span>
+            </div>
+            {scanResult._client_stub_reason && (
+              <p className="text-[9px] text-amber-600 italic">
+                Stub mode: {scanResult._client_stub_reason}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-1 text-[9px]">
+              <span className="px-1.5 py-0.5 rounded font-mono bg-white border border-gray-200">
+                computer:{scanResult.modes?.computer || '?'}
+              </span>
+              <span className="px-1.5 py-0.5 rounded font-mono bg-white border border-gray-200">
+                claude:{scanResult.modes?.classifier || '?'}
+              </span>
+            </div>
+            <div className="space-y-1.5 mt-2">
+              {scanResult.verdicts?.map((v, i) => (
+                <div
+                  key={i}
+                  className={`px-2 py-1.5 rounded border text-[10px] ${
+                    v.category === 'breaking'
+                      ? 'bg-red-50/40 border-red-200'
+                      : v.category === 'substantive'
+                      ? 'bg-amber-50/40 border-amber-200'
+                      : v.category === 'clarification'
+                      ? 'bg-blue-50/30 border-blue-100'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="font-semibold text-text-primary truncate flex-1">{v.concept_name}</span>
+                    <span
+                      className={`px-1 py-0.5 rounded text-[8px] font-bold tracking-wider shrink-0 ${
+                        v.category === 'breaking'
+                          ? 'bg-red-600 text-white'
+                          : v.category === 'substantive'
+                          ? 'bg-amber-500 text-white'
+                          : v.category === 'clarification'
+                          ? 'bg-blue-200 text-blue-900'
+                          : 'bg-gray-200 text-gray-600'
+                      }`}
+                    >
+                      {v.category}
+                    </span>
+                  </div>
+                  <p className="text-gray-600 leading-snug line-clamp-2">{v.summary}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {scanResult?.error && (
+          <p className="mt-2 text-[10px] text-red-600">Error: {scanResult.error}</p>
+        )}
       </div>
 
       {/* Seed demo content — dev only */}

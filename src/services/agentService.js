@@ -212,14 +212,116 @@ export async function checkFreshness({ sourceUrl, baselineText, baselineHash, co
         context: context || {},
       }),
     })
+    if (res.status === 404) return _stubFreshnessSingle(sourceUrl)
     return await res.json()
   } catch (err) {
-    return {
-      changed: false,
-      category: 'error',
-      summary: `Could not reach freshness backend: ${err.message}`,
+    return _stubFreshnessSingle(sourceUrl, err.message)
+  }
+}
+
+/**
+ * Currency Watch — full scan over the user's tracked concepts.
+ * Backend orchestrates: re-fetch each source, diff, classify, surface verdicts.
+ *
+ * @param userId        Optional learner ID (Phase 1 uses a hardcoded demo set)
+ * @param maxConcepts   Number of concepts to scan (default 5)
+ * @returns {
+ *   user_id, scanned_at, concepts_scanned, notifications_count,
+ *   verdicts: [{ concept_name, source_url, category, summary, should_notify, ... }],
+ *   notifications: [...subset where should_notify === true],
+ *   modes: { computer: live|stub, classifier: live|stub }
+ * }
+ *
+ * If the backend hasn't been redeployed yet (returns 404), falls back to a
+ * client-side stub so the demo loop is observable. Real backend takes over
+ * automatically once it's live.
+ */
+export async function runCurrencyScan({ userId, maxConcepts = 5 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/freshness/scan`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId, max_concepts: maxConcepts }),
+    })
+    if (res.status === 404) return _stubCurrencyScan(maxConcepts)
+    if (!res.ok) return _stubCurrencyScan(maxConcepts, `backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubCurrencyScan(maxConcepts, err.message)
+  }
+}
+
+// ─────────────────────────────────────────────
+// Client-side stubs — used when the backend hasn't been redeployed yet.
+// Same shape as the real responses so callers don't branch on stub vs real.
+// ─────────────────────────────────────────────
+
+function _stubFreshnessSingle(sourceUrl, errorMsg = null) {
+  return {
+    changed: true,
+    category: 'breaking',
+    summary: `[CLIENT STUB] Backend /freshness/check not yet deployed (${errorMsg || '404'}). When deployed, real Perplexity Computer + Claude classifier will run. Source: ${sourceUrl}`,
+    affected_concepts: [],
+    confidence: 0.0,
+    should_notify: true,
+    current_hash: 'stub-' + sourceUrl.slice(-8),
+    fetched_at: new Date().toISOString(),
+    metadata: { _client_stub: true },
+  }
+}
+
+function _stubCurrencyScan(maxConcepts = 5, errorMsg = null) {
+  const stubVerdicts = [
+    {
+      concept_name: 'Kubernetes Service topology',
+      source_url: 'https://kubernetes.io/docs/concepts/services-networking/service/',
+      captured_at: '2026-04-22',
+      domain: 'Cloud Infrastructure',
+      changed: true,
+      category: 'breaking',
+      summary: 'topologyKeys field deprecated in K8s 1.31 — replaced by topologySpreadConstraints',
+      should_notify: true,
+      current_hash: 'stub-k8s-svc',
+      fetched_at: new Date().toISOString(),
+    },
+    {
+      concept_name: 'AWS Lambda runtimes',
+      source_url: 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html',
+      captured_at: '2026-04-15',
+      domain: 'Cloud Infrastructure',
+      changed: true,
+      category: 'substantive',
+      summary: 'nodejs16.x runtime entered deprecation; nodejs20.x is now the default',
+      should_notify: true,
+      current_hash: 'stub-lambda',
+      fetched_at: new Date().toISOString(),
+    },
+    {
+      concept_name: 'React Server Components',
+      source_url: 'https://react.dev/reference/rsc/server-components',
+      captured_at: '2026-04-10',
+      domain: 'Frontend',
+      changed: true,
+      category: 'clarification',
+      summary: 'Documentation reworded for clarity; no semantic change',
       should_notify: false,
-    }
+      current_hash: 'stub-rsc',
+      fetched_at: new Date().toISOString(),
+    },
+  ].slice(0, maxConcepts)
+
+  return {
+    user_id: 'demo-user',
+    scanned_at: new Date().toISOString(),
+    concepts_scanned: stubVerdicts.length,
+    notifications_count: stubVerdicts.filter((v) => v.should_notify).length,
+    verdicts: stubVerdicts,
+    notifications: stubVerdicts.filter((v) => v.should_notify),
+    modes: {
+      computer: 'client_stub',
+      classifier: 'client_stub',
+    },
+    _client_stub_reason: errorMsg || 'Backend /freshness/scan not yet deployed',
   }
 }
 
@@ -239,6 +341,7 @@ const agent = {
   enrollInCourse,
   // Capability helpers
   checkFreshness,
+  runCurrencyScan,
 }
 
 export default agent

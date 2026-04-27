@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Aasan — Peraasan Agent Bridge",
+  "version": "1.0.0",
+  "description": "Gives Peraasan the ability to read web pages, navigate, and act on behalf of the learner.",
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://aasan-v2.vercel.app/*", "*://localhost:5174/*"],
+      "js": ["bridge.js"]
+    }
+  ],
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

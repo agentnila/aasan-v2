@@ -166,27 +166,91 @@ export async function completeReview(userId, conceptName, rating) {
 }
 
 // ─────────────────────────────────────────────
-// PERPLEXITY COMET (agentic browser)
-// Future: communicates with Comet running on the same machine
+// AASAN AGENT BRIDGE (via Chrome Extension)
+// Communicates with Perplexity Comet browser capabilities
+// Extension must be installed for agentic features
 // ─────────────────────────────────────────────
 
-export async function cometBrowse(url) {
-  // TODO: Call Perplexity Comet's agent API
-  // For now, return a placeholder
-  console.log("[Comet] Would navigate to:", url);
-  return { status: "not_connected", url };
+let bridgeReady = false;
+
+// Listen for bridge ready signal from extension
+if (typeof window !== "undefined") {
+  window.addEventListener("message", (event) => {
+    if (event.data?.source === "aasan-bridge" && event.data?.type === "ready") {
+      bridgeReady = true;
+      console.log("[Aasan] Agent bridge connected — Peraasan has hands.");
+    }
+  });
 }
 
-export async function cometRead(url) {
-  // TODO: Call Comet to read page content
-  console.log("[Comet] Would read:", url);
-  return { status: "not_connected", url };
+export function isAgentConnected() {
+  return bridgeReady;
 }
 
-export async function cometEnroll(courseUrl) {
-  // TODO: Call Comet to navigate enrollment flow
-  console.log("[Comet] Would enroll at:", courseUrl);
-  return { status: "not_connected", courseUrl };
+// Send a request to the extension and wait for response
+function agentRequest(action, payload, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const timeout = setTimeout(() => {
+      window.removeEventListener("message", handler);
+      reject(new Error("Agent request timed out"));
+    }, timeoutMs);
+
+    function handler(event) {
+      if (event.data?.source === "aasan-bridge" && event.data?.requestId === requestId) {
+        clearTimeout(timeout);
+        window.removeEventListener("message", handler);
+        if (event.data.error) {
+          reject(new Error(event.data.error));
+        } else {
+          resolve(event.data.result);
+        }
+      }
+    }
+
+    window.addEventListener("message", handler);
+
+    window.postMessage({
+      source: "aasan-peraasan",
+      action,
+      payload,
+      requestId,
+    }, "*");
+  });
+}
+
+// Read a URL — Peraasan sends the browser to read a page
+export async function agentReadPage(url) {
+  if (!bridgeReady) {
+    console.log("[Agent] Bridge not connected — cannot read:", url);
+    return { status: "not_connected", url };
+  }
+  return agentRequest("read_page", { url });
+}
+
+// Read whatever tab is currently active
+export async function agentReadCurrentTab() {
+  if (!bridgeReady) return { status: "not_connected" };
+  return agentRequest("read_current_tab", {});
+}
+
+// Open a URL and read it (keeps tab open for the learner)
+export async function agentOpenAndRead(url) {
+  if (!bridgeReady) return { status: "not_connected", url };
+  return agentRequest("open_and_read", { url });
+}
+
+// Get all open tabs
+export async function agentGetTabs() {
+  if (!bridgeReady) return { status: "not_connected" };
+  return agentRequest("get_open_tabs", {});
+}
+
+// Search open tabs by keyword
+export async function agentSearchTabs(query) {
+  if (!bridgeReady) return { status: "not_connected" };
+  return agentRequest("search_tabs", { query });
 }
 
 // ─────────────────────────────────────────────
@@ -195,19 +259,16 @@ export async function cometEnroll(courseUrl) {
 // ─────────────────────────────────────────────
 
 export async function computerDigest(content) {
-  // TODO: Call Perplexity Computer to summarise/extract
   console.log("[Computer] Would digest content");
   return { status: "not_connected" };
 }
 
 export async function computerResearch(query, sources) {
-  // TODO: Call Computer for multi-step research
   console.log("[Computer] Would research:", query);
   return { status: "not_connected", query };
 }
 
 export async function computerMonitor(sourceUrl) {
-  // TODO: Call Computer to watch for new content
   console.log("[Computer] Would monitor:", sourceUrl);
   return { status: "not_connected", sourceUrl };
 }

@@ -89,16 +89,27 @@ export default function DemoSourcesNav({ activeGoalId = 1, goalCount = 3 }) {
         </div>
       </div>
 
-      {/* Agent Bridge status */}
+      {/* Agentic stack status — V3 two-vendor split */}
       <div className="px-4 py-3 border-b border-gray-50">
-        <div className="flex items-center gap-2 px-2">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-gold opacity-50"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-gold"></span>
-          </span>
-          <p className="text-[10px] text-gold font-semibold tracking-wider">⚡ AGENT BRIDGE CONNECTED</p>
+        <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-2">AGENTIC STACK</p>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 px-2">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-gold opacity-50"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-gold"></span>
+            </span>
+            <p className="text-[10px] text-gold font-semibold tracking-wider flex-1">⚡ Bridge · Chrome</p>
+            <span className="text-[9px] text-green-600 font-mono">live</span>
+          </div>
+          <p className="text-[9px] text-gray-400 px-2">Reads any web page in your browser</p>
+
+          <div className="flex items-center gap-2 px-2 pt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+            <p className="text-[10px] text-purple-700 font-semibold tracking-wider flex-1">⚙ Perplexity Computer</p>
+            <span className="text-[9px] text-amber-600 font-mono">stub</span>
+          </div>
+          <p className="text-[9px] text-gray-400 px-2">Server-side: research, scrapes, enrollment</p>
         </div>
-        <p className="text-[10px] text-gray-400 mt-1 px-2">Peraasan can read web pages on your behalf</p>
       </div>
 
       {/* Language preference */}

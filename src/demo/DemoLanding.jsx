@@ -28,10 +28,16 @@ export default function DemoLanding({ notFound }) {
             Keeps track of everything you've learnt.
           </h2>
           <div className="md:col-span-2 flex flex-col justify-end">
-            <p className="text-gray-600 leading-relaxed">
-              It's an AI learning agent for enterprises. It finds the right content for your goal across every source your company has — Coursera, the LMS, Confluence, the open web — sequences it into a path, teaches alongside you in conversation, and captures every concept you pick up into a permanent knowledge graph that's yours forever. As the world changes — APIs deprecate, runbooks get updated — Aasan keeps your knowledge fresh.
-            </p>
-            <p className="text-gray-500 text-sm leading-relaxed mt-3">
+            <div className="space-y-2.5 text-gray-600 leading-relaxed">
+              <p>An AI learning agent for enterprises.</p>
+              <p>Finds the right content for your goal — from Coursera, the LMS, Confluence, the open web. All of it.</p>
+              <p>Sequences it into a path. Teaches you in conversation. Captures every concept into a knowledge graph that's yours.</p>
+              <p>When the world changes — APIs deprecate, runbooks get rewritten — Aasan keeps what you know up to date.</p>
+              <p className="text-text-primary font-semibold pt-1">
+                You spend less time hunting, more time learning — and your knowledge compounds across your whole career.
+              </p>
+            </div>
+            <p className="text-gray-500 text-sm leading-relaxed mt-5 pt-4 border-t border-gray-100">
               The 10 scenarios below walk through how it works. Click any one. The narrator panel on the right of each scene tells the story — watch for the gold <span className="text-gold font-semibold">⚡ agentic moments</span>.
             </p>
           </div>

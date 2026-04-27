@@ -739,26 +739,20 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
       )}
 
       {/* Input */}
-      <div className="px-6 py-5 border-t border-gray-100 bg-white">
+      <div className="px-6 py-4 border-t border-gray-100 bg-white">
         <div className="max-w-2xl mx-auto flex gap-3">
-          <textarea
+          <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage(input);
-              }
-            }}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
             placeholder="Ask Peraasan anything..."
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-text-primary placeholder-gray-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/10 transition-all resize-none min-h-[52px] max-h-[140px]"
-            rows={2}
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[13px] text-text-primary placeholder-gray-400 focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/10 transition-all"
             autoFocus
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim()}
-            className={`px-6 py-3 rounded-xl text-[13px] font-medium transition-all self-end ${
+            className={`px-5 py-3 rounded-xl text-[13px] font-medium transition-all ${
               input.trim()
                 ? "bg-navy text-white hover:bg-navy/90"
                 : "bg-gray-100 text-gray-400"

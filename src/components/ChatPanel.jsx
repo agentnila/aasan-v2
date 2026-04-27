@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 import MessageBubble from "./MessageBubble";
-import { captureSession, completeReview, addMemory, searchContent, isAgentConnected, agentReadPage, agentOpenAndRead } from "../services/api";
+import { captureSession, completeReview, addMemory, searchContent, addContent, isAgentConnected, agentReadPage, agentOpenAndRead } from "../services/api";
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 const CLAUDE_MODEL = "claude-sonnet-4-5";
@@ -138,9 +138,10 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
   }, [messages, isTyping]);
 
   // Background: extract concepts from conversation and capture to backend
-  async function extractAndCapture(userText, assistantText) {
+  async function extractAndCapture(userText, assistantText, isPageRead = false) {
     try {
-      const extractionPrompt = "Extract key concepts from this learning conversation. Return JSON: { concepts: [{ name, definition, subject, domain, confidence, is_gap, gap_type, connects_to }], summary: string }. If this is NOT a learning conversation (just casual chat, greetings, etc.), return { concepts: [], summary: null }.";
+      const maxConfidence = isPageRead ? 0.2 : 0.7;
+      const extractionPrompt = `Extract key concepts from this learning conversation. Return JSON: { concepts: [{ name, definition, subject, domain, confidence, is_gap, gap_type, connects_to }], summary: string }. If this is NOT a learning conversation (just casual chat, greetings, etc.), return { concepts: [], summary: null }. ${isPageRead ? `IMPORTANT: This content was READ BY THE AI AGENT (Peraasan), not actively studied by the employee. Set confidence to at most ${maxConfidence} for all concepts — this is exposure, not mastery. The employee needs to engage (ask questions, take a quiz, apply the knowledge) before mastery increases.` : ''}`;
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -478,11 +479,39 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
       if (urlMatch && isAgentConnected()) {
         // User pasted a URL — Peraasan reads it
         systemPrompt += `\n\nIMPORTANT: The employee shared a URL. You are reading it for them using your agentic browser. Summarize the key points relevant to their learning goal. Be specific about what the page contains.`;
+        let pageContent = null;
         try {
           const pageData = await agentReadPage(urlMatch[0]);
           if (pageData?.status === "ok" && pageData?.content?.text) {
-            systemPrompt += `\n\nPage content from "${pageData.content.title}" (${urlMatch[0]}):\n\n${pageData.content.text.substring(0, 4000)}`;
+            pageContent = pageData.content;
+            systemPrompt += `\n\nPage content from "${pageContent.title}" (${urlMatch[0]}):\n\n${pageContent.text.substring(0, 4000)}`;
             systemPrompt += `\n\nSummarize the key learning points from this page. Connect them to what the employee already knows. Suggest what to learn next based on this content.`;
+
+            // PERSIST: Read once, remember forever
+            const uid = userId || user?.id;
+            if (uid) {
+              // 1. Save to Mem0 — so Peraasan remembers this page in future sessions
+              // Note: Peraasan read this, NOT the employee. Marked as exposure, not mastery.
+              addMemory(uid, `Peraasan read article for employee: "${pageContent.title}" (${urlMatch[0]}). Employee has been EXPOSED to the summary but has NOT yet learned or been tested on the content. Mastery should remain low until employee engages through Q&A or spaced review.`).catch(() => {});
+
+              // 2. Index in content catalog — so it's searchable later
+              addContent({
+                title: pageContent.title,
+                source: "web",
+                source_url: urlMatch[0],
+                content_type: "article",
+                duration_minutes: Math.max(5, Math.round(pageContent.text.length / 1500)),
+                difficulty: "intermediate",
+                skills: [],
+                concepts_covered: [],
+                ai_summary: pageContent.text.substring(0, 300),
+                quality_score: 0.7,
+              }).catch(() => {});
+
+              // 3. Extract concepts and save to Neo4j — knowledge graph grows
+              // (this happens automatically via extractAndCapture after Claude responds)
+              console.log(`[Agent] Page persisted: "${pageContent.title}" → Mem0 + Content Index + Neo4j (via extraction)`);
+            }
           }
         } catch (err) {
           console.log("[Agent] Failed to read URL:", err.message);
@@ -544,7 +573,8 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
         setMessages((prev) => [...prev, peraasanMsg]);
 
         // Background: extract concepts and capture to backend
-        extractAndCapture(text.trim(), replyText);
+        // If this was a page-read, concepts are saved with low mastery (exposure only)
+        extractAndCapture(text.trim(), replyText, !!urlMatch);
       } else {
         const fallback = generateResponse(text.trim());
         setMessages((prev) => [...prev, fallback]);

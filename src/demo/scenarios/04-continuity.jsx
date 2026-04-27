@@ -26,7 +26,7 @@ const SCENES = [
     title: 'Sarah picks "refresher first"',
     narration: 'She makes one tap. Peraasan starts the K8s 1.31 topology refresher (covered in detail in Scenario 5). After that, she\'ll roll into Service Mesh — exactly where she\'d be if she\'d never left.',
     callouts: [
-      'Notice: she didn\'t have to re-state her goal, re-state her path, or hunt for what she was doing. The agent kept the thread.',
+      'Notice: she didn\'t have to re-state her goal, re-state her path, or hunt for what she was doing. Peraasan kept the thread.',
     ],
   },
 ]

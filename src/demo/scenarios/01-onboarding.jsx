@@ -8,7 +8,8 @@ const SCENES = [
     narration: 'No login form, no setup wizard, no preferences page. Aasan opens to a single conversation. Peraasan introduces itself and asks one question.',
     callouts: [
       'No "configure your account" wizard. Just a conversation.',
-      'The greeting establishes Peraasan as an AGENT — "I work for you, I find content, I remember everything."',
+      'Multilingual opening — "नमस्ते! Bonjour! Hi!" — signals that Peraasan can speak in any of 30+ languages. After this moment, it locks into the employee\'s preferred language (English by default; switchable any time).',
+      'The relationship framing: "personal learning coach and co-learner" — not "agent", not "chatbot". The human-order language matters because Peraasan is going to be alongside Sarah for years.',
     ],
     action: 'Click Next to see Sarah respond.',
   },
@@ -50,7 +51,7 @@ export default function Scenario01Onboarding({ scenario }) {
   if (sceneIndex >= 0) {
     messages.push({
       role: 'peraasan',
-      content: `Hi! I'm Peraasan — your personal learning agent at TechCorp.\n\nI work for you. I'll find the best content from everywhere your company has access to, build your learning path, remember everything you learn, and make sure you never forget it.\n\nTo start: what's the main thing you want to learn or achieve right now?`,
+      content: `नमस्ते! Bonjour! Hi, Sarah —\n\nI'm Peraasan, your personal learning coach and co-learner here at TechCorp. I can speak in any language you prefer; I'll stick with English unless you'd like to switch.\n\nI find the best content from across your company, build your learning path, capture what you learn, and make sure you never forget it.\n\nWhat's the main thing you want to learn or achieve right now?`,
     })
   }
 

@@ -7,7 +7,7 @@ const SCENES = [
     title: 'A flag Sarah learned in April was deprecated',
     narration: 'Sarah read the Kubernetes Services docs in April (scenario 3 — captured at exposure mastery 0.2). On May 18, K8s 1.31 shipped. The topologyKeys field is now deprecated in favor of topologySpreadConstraints. Sarah doesn\'t know yet.',
     callouts: [
-      'No prompt from Sarah. The agent figured this out independently.',
+      'No prompt from Sarah. Peraasan figured this out independently in the background.',
       'External Freshness Watcher = daily background scan. Subscribed to release notes from Kubernetes, AWS, and other tracked projects.',
     ],
   },

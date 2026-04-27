@@ -101,6 +101,17 @@ export default function DemoSourcesNav({ activeGoalId = 1, goalCount = 3 }) {
         <p className="text-[10px] text-gray-400 mt-1 px-2">Peraasan can read web pages on your behalf</p>
       </div>
 
+      {/* Language preference */}
+      <div className="px-4 py-3 border-b border-gray-50">
+        <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-1.5">PERAASAN SPEAKS</p>
+        <div className="flex items-center gap-2 px-2">
+          <span className="text-[11px] text-text-primary font-medium">English</span>
+          <span className="text-[10px] text-gray-400">·</span>
+          <button className="text-[10px] text-gold hover:underline">change</button>
+        </div>
+        <p className="text-[9px] text-gray-400 mt-1 px-2 italic">30+ languages supported</p>
+      </div>
+
       {/* Account at bottom */}
       <div className="mt-auto px-4 py-3 border-t border-gray-50">
         <div className="flex items-center gap-2.5 px-2.5 py-2">

@@ -21,18 +21,20 @@ export default function DemoLanding({ notFound }) {
           </div>
         </div>
 
-        <div className="mt-6 mb-10 max-w-2xl">
-          <h2 className="text-3xl font-serif text-text-primary leading-tight mb-4">
+        <div className="mt-8 mb-10 grid md:grid-cols-5 gap-x-10 gap-y-4">
+          <h2 className="md:col-span-3 text-3xl md:text-4xl font-serif text-text-primary leading-tight">
             Aasan helps you learn.<br />
             Learns <span className="italic">with</span> you.<br />
             Keeps track of everything you've learnt.
           </h2>
-          <p className="text-gray-600 leading-relaxed">
-            It's an AI learning agent for enterprises. It finds the right content for your goal across every source your company has — Coursera, the LMS, Confluence, the open web — sequences it into a path, teaches alongside you in conversation, and captures every concept you pick up into a permanent knowledge graph that's yours forever. As the world changes — APIs deprecate, runbooks get updated — Aasan keeps your knowledge fresh.
-          </p>
-          <p className="text-gray-500 text-sm leading-relaxed mt-3">
-            The 10 scenarios below walk through how it works. Click any one. The narrator panel on the right of each scene tells the story — watch for the gold <span className="text-gold font-semibold">⚡ agentic moments</span>.
-          </p>
+          <div className="md:col-span-2 flex flex-col justify-end">
+            <p className="text-gray-600 leading-relaxed">
+              It's an AI learning agent for enterprises. It finds the right content for your goal across every source your company has — Coursera, the LMS, Confluence, the open web — sequences it into a path, teaches alongside you in conversation, and captures every concept you pick up into a permanent knowledge graph that's yours forever. As the world changes — APIs deprecate, runbooks get updated — Aasan keeps your knowledge fresh.
+            </p>
+            <p className="text-gray-500 text-sm leading-relaxed mt-3">
+              The 10 scenarios below walk through how it works. Click any one. The narrator panel on the right of each scene tells the story — watch for the gold <span className="text-gold font-semibold">⚡ agentic moments</span>.
+            </p>
+          </div>
         </div>
 
         {notFound && (

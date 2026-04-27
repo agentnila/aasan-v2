@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 import MessageBubble from "./MessageBubble";
-import { captureSession, completeReview, addMemory, searchContent } from "../services/api";
+import { captureSession, completeReview, addMemory, searchContent, isAgentConnected, agentReadPage, agentOpenAndRead } from "../services/api";
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 const CLAUDE_MODEL = "claude-sonnet-4-5";
@@ -471,7 +471,34 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
         systemPrompt += `\n\nEmployee's goal: ${savedGoal.goal}. Why: ${savedGoal.objective}. Timeline: ${savedGoal.timeline}. Success criteria: ${savedGoal.criteria}.`;
       }
 
-      // Task 2 & 3: Search content for recommendations or learning intent
+      // AGENTIC: Detect URLs or "read this page" intent
+      const urlMatch = text.trim().match(/https?:\/\/[^\s]+/);
+      const readPageIntent = /read (this|that|the) (page|article|doc|document|link|url)|summarize (this|that|the)|what does (this|that) (say|page|article)/i.test(text.trim());
+
+      if (urlMatch && isAgentConnected()) {
+        // User pasted a URL — Peraasan reads it
+        systemPrompt += `\n\nIMPORTANT: The employee shared a URL. You are reading it for them using your agentic browser. Summarize the key points relevant to their learning goal. Be specific about what the page contains.`;
+        try {
+          const pageData = await agentReadPage(urlMatch[0]);
+          if (pageData?.status === "ok" && pageData?.content?.text) {
+            systemPrompt += `\n\nPage content from "${pageData.content.title}" (${urlMatch[0]}):\n\n${pageData.content.text.substring(0, 4000)}`;
+            systemPrompt += `\n\nSummarize the key learning points from this page. Connect them to what the employee already knows. Suggest what to learn next based on this content.`;
+          }
+        } catch (err) {
+          console.log("[Agent] Failed to read URL:", err.message);
+          systemPrompt += `\n\nI tried to read the page but couldn't access it. Help the employee based on the URL alone.`;
+        }
+      } else if (readPageIntent && isAgentConnected()) {
+        // User says "read this page" — read whatever other tab they have open
+        systemPrompt += `\n\nThe employee asked you to read a page. You are reading their currently active tab using the agentic browser.`;
+        // Note: this reads the Aasan tab itself, not ideal. In practice,
+        // the user would share a URL or we'd read a recently opened tab.
+        systemPrompt += `\n\nAsk the employee to share the URL of the page they want you to read.`;
+      } else if (urlMatch && !isAgentConnected()) {
+        systemPrompt += `\n\nThe employee shared a URL: ${urlMatch[0]}. The Aasan agent extension is not installed, so you cannot read the page. Tell them: "I can see the link but I need the Aasan extension installed in your browser to read pages for you. For now, tell me what the page is about and I'll help from there."`;
+      }
+
+      // Search content for recommendations or learning intent
       let contentResults = [];
       if (hasRecommendationIntent(text.trim()) || hasLearningIntent(text.trim())) {
         const searchQuery = savedGoal ? `${text.trim()} ${savedGoal.goal}` : text.trim();
@@ -484,7 +511,7 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
           systemPrompt += `${i + 1}. "${item.title}" — Source: ${item.source}, Type: ${item.type || 'content'}, Duration: ${item.duration_minutes || '?'} min, Level: ${item.level || 'unknown'}${item.ai_summary ? `, Summary: ${item.ai_summary}` : ''}\n`;
         });
         systemPrompt += `\nReference these actual content items when making recommendations. Include the real title, source, and duration.`;
-      } else if (hasLearningIntent(text.trim())) {
+      } else if (hasLearningIntent(text.trim()) && !urlMatch) {
         systemPrompt += `\n\nNo indexed content matched this query. Use your own knowledge to help, and note: "I'll search your company's sources when they're connected."`;
       }
 

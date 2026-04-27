@@ -2,13 +2,30 @@ import { useState } from 'react'
 import DemoFrame from '../DemoFrame'
 import ChatScene from '../components/ChatScene'
 
+// Peraasan opens with a greeting in a random language — picked once per page
+// load. After this moment, it settles into the employee's preferred language.
+const GREETINGS = [
+  { hello: 'नमस्ते', lang: 'Hindi' },
+  { hello: 'Bonjour', lang: 'French' },
+  { hello: 'Hola', lang: 'Spanish' },
+  { hello: '你好', lang: 'Mandarin' },
+  { hello: 'こんにちは', lang: 'Japanese' },
+  { hello: 'Guten Tag', lang: 'German' },
+  { hello: 'Olá', lang: 'Portuguese' },
+  { hello: '안녕하세요', lang: 'Korean' },
+  { hello: 'مرحبا', lang: 'Arabic' },
+  { hello: 'Vanakkam', lang: 'Tamil' },
+  { hello: 'Ciao', lang: 'Italian' },
+  { hello: 'Привет', lang: 'Russian' },
+]
+
 const SCENES = [
   {
     title: 'Sarah opens Aasan for the first time',
     narration: 'No login form, no setup wizard, no preferences page. Aasan opens to a single conversation. Peraasan introduces itself and asks one question.',
     callouts: [
       'No "configure your account" wizard. Just a conversation.',
-      'Multilingual opening — "नमस्ते! Bonjour! Hi!" — signals that Peraasan can speak in any of 30+ languages. After this moment, it locks into the employee\'s preferred language (English by default; switchable any time).',
+      'Peraasan opens with a greeting in a random language each time — a small personality signal that it can speak in any of 30+ languages. After this moment, it locks into the employee\'s preferred language (English by default; switchable any time). Refresh the page to see a different opener.',
       'The relationship framing: "personal learning coach and co-learner" — not "agent", not "chatbot". The human-order language matters because Peraasan is going to be alongside Sarah for years.',
     ],
     action: 'Click Next to see Sarah respond.',
@@ -44,6 +61,8 @@ const SCENES = [
 
 export default function Scenario01Onboarding({ scenario }) {
   const [sceneIndex, setSceneIndex] = useState(0)
+  // Pick once per mount — stable through scene changes, varies across page loads
+  const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)])
 
   // Build messages array based on which scene we're in
   const messages = []
@@ -51,7 +70,7 @@ export default function Scenario01Onboarding({ scenario }) {
   if (sceneIndex >= 0) {
     messages.push({
       role: 'peraasan',
-      content: `नमस्ते! Bonjour! Hi, Sarah —\n\nI'm Peraasan, your personal learning coach and co-learner here at TechCorp. I can speak in any language you prefer; I'll stick with English unless you'd like to switch.\n\nI find the best content from across your company, build your learning path, capture what you learn, and make sure you never forget it.\n\nWhat's the main thing you want to learn or achieve right now?`,
+      content: `${greeting.hello}! Hi, Sarah —\n\nI'm Peraasan, your personal learning coach and co-learner here at TechCorp. I can speak in any language you prefer; I'll stick with English unless you'd like to switch.\n\nI find the best content from across your company, build your learning path, capture what you learn, and make sure you never forget it.\n\nWhat's the main thing you want to learn or achieve right now?`,
     })
   }
 

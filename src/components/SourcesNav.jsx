@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useClerk } from "@clerk/clerk-react";
+import { seedDemoContent } from "../data/seedContent";
 
 const sources = [
   { name: "Coursera", icon: "C", color: "bg-blue-500", connected: true, items: 2400 },
@@ -15,8 +16,22 @@ const sources = [
 
 export default function SourcesNav() {
   const [open, setOpen] = useState(true);
+  const [seeding, setSeeding] = useState(false);
+  const [seedDone, setSeedDone] = useState(false);
   const connectedCount = sources.filter((s) => s.connected).length;
   const { openUserProfile, signOut } = useClerk();
+  const isDev = import.meta.env.DEV;
+
+  async function handleSeed() {
+    setSeeding(true);
+    try {
+      await seedDemoContent();
+      setSeedDone(true);
+    } catch (err) {
+      console.error('[Seed] Error:', err);
+    }
+    setSeeding(false);
+  }
 
   // Collapsed state — just a thin strip with logo + toggle
   if (!open) {
@@ -140,6 +155,25 @@ export default function SourcesNav() {
           ))}
         </div>
       </div>
+
+      {/* Seed demo content — dev only */}
+      {isDev && (
+        <div className="px-4 py-3 border-t border-gray-50">
+          <button
+            onClick={handleSeed}
+            disabled={seeding || seedDone}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-medium transition-all ${
+              seedDone
+                ? 'bg-green-50 text-green-600 cursor-default'
+                : seeding
+                ? 'bg-gray-100 text-gray-400 cursor-wait'
+                : 'bg-navy/5 text-navy hover:bg-navy/10'
+            }`}
+          >
+            {seedDone ? 'Demo content seeded' : seeding ? 'Seeding...' : 'Seed demo content'}
+          </button>
+        </div>
+      )}
 
       {/* Account actions at bottom */}
       <div className="mt-auto px-4 py-3 border-t border-gray-50 flex flex-col gap-0.5">

@@ -1,9 +1,17 @@
 import { useUser, UserButton } from '@clerk/clerk-react'
 
-export default function ContextPanel({ data }) {
+export default function ContextPanel({ data, context, contextLoading }) {
   const { user } = useUser()
   const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Employee'
   const email = user?.primaryEmailAddress?.emailAddress || ''
+
+  // Real data from backend, with fallbacks
+  const totalConcepts = context?.knowledge?.total_concepts ?? '--'
+  const gaps = context?.knowledge?.gaps ?? '--'
+  const avgMastery = context?.knowledge?.avg_mastery != null ? Math.round(context.knowledge.avg_mastery) : '--'
+  const reviewsDue = context?.reviews_due || []
+  // memories stored for Peraasan use
+  const _memories = context?.memories || []
 
   return (
     <aside className="w-[320px] min-w-[320px] bg-white border-l border-gray-100 flex flex-col overflow-y-auto no-scrollbar">
@@ -80,35 +88,45 @@ export default function ContextPanel({ data }) {
         </div>
       )}
 
-      {/* Knowledge Stats — Always visible */}
+      {/* Knowledge Stats — Real data from backend */}
       <div className="px-5 py-4 border-b border-gray-50">
         <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-2">YOUR KNOWLEDGE</p>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="bg-gray-50 rounded-lg p-2">
-            <p className="text-[16px] font-bold text-text-primary">42</p>
-            <p className="text-[8px] text-gray-400">concepts</p>
+        {contextLoading ? (
+          <div className="text-[11px] text-gray-400 py-2">Loading...</div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-gray-50 rounded-lg p-2">
+              <p className="text-[16px] font-bold text-text-primary">{totalConcepts}</p>
+              <p className="text-[8px] text-gray-400">concepts</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-2">
+              <p className="text-[16px] font-bold text-red-500">{gaps}</p>
+              <p className="text-[8px] text-gray-400">gaps</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-2">
+              <p className="text-[16px] font-bold text-gold">{avgMastery}</p>
+              <p className="text-[8px] text-gray-400">mastery</p>
+            </div>
           </div>
-          <div className="bg-gray-50 rounded-lg p-2">
-            <p className="text-[16px] font-bold text-red-500">3</p>
-            <p className="text-[8px] text-gray-400">gaps</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-2">
-            <p className="text-[16px] font-bold text-gold">8</p>
-            <p className="text-[8px] text-gray-400">streak</p>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Reviews due */}
+      {/* Reviews due — real data from backend */}
       <div className="px-5 py-4 border-b border-gray-50">
         <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-2">REVIEWS DUE</p>
         <div className="flex flex-col gap-1.5">
-          {["Kubernetes Pods", "AWS IAM Policies", "Docker Networking"].map((concept) => (
-            <div key={concept} className="flex items-center gap-2 text-[11px]">
-              <div className="w-1.5 h-1.5 rounded-full bg-gold" />
-              <span className="text-text-primary">{concept}</span>
-            </div>
-          ))}
+          {reviewsDue.length > 0 ? (
+            reviewsDue.map((review, i) => (
+              <div key={i} className="flex items-center gap-2 text-[11px]">
+                <div className="w-1.5 h-1.5 rounded-full bg-gold" />
+                <span className="text-text-primary">{review.concept_name || review.name || review}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-[10px] text-gray-400">
+              {contextLoading ? 'Loading...' : 'No reviews due right now'}
+            </p>
+          )}
         </div>
       </div>
 

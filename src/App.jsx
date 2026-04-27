@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SignedIn, SignedOut, SignIn, useUser } from '@clerk/clerk-react'
 import './index.css'
 import SourcesNav from './components/SourcesNav'
 import ChatPanel from './components/ChatPanel'
 import ContextPanel from './components/ContextPanel'
+import { loadContext } from './services/api'
 
 function AasanApp() {
   const { user } = useUser()
@@ -11,12 +12,39 @@ function AasanApp() {
     type: 'idle',
     goal: { name: 'Cloud Architect', readiness: 62, daysLeft: 250, streak: 8 },
   })
+  const [backendContext, setBackendContext] = useState(null)
+  const [contextLoading, setContextLoading] = useState(true)
+
+  // Load real context from Render backend on mount
+  useEffect(() => {
+    if (!user?.id) return
+    setContextLoading(true)
+    loadContext(user.id)
+      .then((data) => {
+        setBackendContext(data)
+        setContextLoading(false)
+      })
+      .catch((err) => {
+        console.error('[Aasan] Failed to load context:', err)
+        setContextLoading(false)
+      })
+  }, [user?.id])
 
   return (
     <div className="flex h-screen w-screen bg-bg">
       <SourcesNav />
-      <ChatPanel onContextChange={setContextData} userName={user?.firstName || 'there'} />
-      <ContextPanel data={contextData} user={user} />
+      <ChatPanel
+        onContextChange={setContextData}
+        userName={user?.firstName || 'there'}
+        context={backendContext}
+        userId={user?.id}
+      />
+      <ContextPanel
+        data={contextData}
+        user={user}
+        context={backendContext}
+        contextLoading={contextLoading}
+      />
     </div>
   )
 }

@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 import MessageBubble from "./MessageBubble";
+import { captureSession, completeReview } from "../services/api";
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 const CLAUDE_MODEL = "claude-sonnet-4-5";
-const SYSTEM_PROMPT = `You are Peraasan, the AI learning agent inside Aasan — Your Personal University for enterprises.
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+
+const BASE_SYSTEM_PROMPT = `You are Peraasan, the AI learning agent inside Aasan — Your Personal University for enterprises.
 
 Your personality: warm, encouraging, concise, action-oriented. You are the employee's personal learning companion.
 
@@ -24,15 +27,47 @@ Rules:
 - If they seem stuck, use micro-commitments ("just read the first paragraph")
 - You are an agent that ACTS for them, not just answers questions`;
 
-function getInitialMessages(name) {
-  return [
-    {
-      id: 1,
-      role: "peraasan",
-      content: `Good to see you, ${name}! What do you want to learn today?`,
-      timestamp: new Date(),
-    },
-  ];
+function buildSystemPrompt(userName, context) {
+  let prompt = BASE_SYSTEM_PROMPT + `\n\nThe employee's name is ${userName || "there"}.`;
+
+  if (context?.memories && context.memories.length > 0) {
+    prompt += `\n\nHere is what you remember about this employee from previous sessions:\n`;
+    context.memories.forEach((mem, i) => {
+      const text = typeof mem === 'string' ? mem : (mem.memory || mem.text || mem.content || JSON.stringify(mem));
+      prompt += `${i + 1}. ${text}\n`;
+    });
+  }
+
+  if (context?.knowledge) {
+    prompt += `\n\nCurrent knowledge stats: ${context.knowledge.total_concepts || 0} concepts in graph, ${context.knowledge.gaps || 0} gaps, average mastery ${context.knowledge.avg_mastery || 0}%.`;
+  }
+
+  if (context?.reviews_due && context.reviews_due.length > 0) {
+    prompt += `\n\n${context.reviews_due.length} concepts are due for spaced review: ${context.reviews_due.map(r => r.concept_name || r.name || r).join(', ')}.`;
+  }
+
+  return prompt;
+}
+
+function getInitialGreeting(name, context) {
+  if (!context) {
+    return `Good to see you, ${name}! Loading your knowledge graph...`;
+  }
+
+  const concepts = context.knowledge?.total_concepts || 0;
+  const gaps = context.knowledge?.gaps || 0;
+  const reviewsDue = context.reviews_due || [];
+
+  if (reviewsDue.length > 0) {
+    const estMin = Math.max(1, reviewsDue.length);
+    return `Good to see you, ${name}! You have ${concepts} concepts in your graph${gaps > 0 ? ` and ${gaps} gaps to close` : ''}. You also have ${reviewsDue.length} concept${reviewsDue.length === 1 ? '' : 's'} due for review. Want to knock those out first? (${estMin} min)`;
+  }
+
+  if (concepts > 0) {
+    return `Good to see you, ${name}! You have ${concepts} concepts in your graph${gaps > 0 ? ` and ${gaps} gaps to close` : ''}. What do you want to learn today?`;
+  }
+
+  return `Good to see you, ${name}! What do you want to learn today?`;
 }
 
 const QUICK_ACTIONS = [
@@ -42,16 +77,215 @@ const QUICK_ACTIONS = [
   "Review something",
 ];
 
-export default function ChatPanel({ onContextChange, userName }) {
+export default function ChatPanel({ onContextChange, userName, context, userId }) {
   const { user } = useUser();
-  const [messages, setMessages] = useState(() => getInitialMessages(userName || 'there'));
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [reviewMode, setReviewMode] = useState(null); // { concept, question, index }
   const endRef = useRef(null);
+  const contextLoadedRef = useRef(false);
+
+  // Set initial greeting, update when context loads
+  useEffect(() => {
+    if (context && !contextLoadedRef.current) {
+      contextLoadedRef.current = true;
+      const greeting = getInitialGreeting(userName || 'there', context);
+      setMessages([{
+        id: 1,
+        role: "peraasan",
+        content: greeting,
+        timestamp: new Date(),
+      }]);
+    } else if (!contextLoadedRef.current && messages.length === 0) {
+      setMessages([{
+        id: 1,
+        role: "peraasan",
+        content: getInitialGreeting(userName || 'there', null),
+        timestamp: new Date(),
+      }]);
+    }
+  }, [context, userName]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
+
+  // Background: extract concepts from conversation and capture to backend
+  async function extractAndCapture(userText, assistantText) {
+    try {
+      const extractionPrompt = "Extract key concepts from this learning conversation. Return JSON: { concepts: [{ name, definition, subject, domain, confidence, is_gap, gap_type, connects_to }], summary: string }. If this is NOT a learning conversation (just casual chat, greetings, etc.), return { concepts: [], summary: null }.";
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": CLAUDE_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: HAIKU_MODEL,
+          max_tokens: 1024,
+          system: extractionPrompt,
+          messages: [
+            { role: "user", content: userText },
+            { role: "assistant", content: assistantText },
+          ],
+        }),
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || '';
+
+      // Parse JSON from response (handle markdown code blocks)
+      let parsed;
+      try {
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
+        parsed = JSON.parse(jsonMatch[1].trim());
+      } catch {
+        console.log('[Capture] Could not parse extraction response');
+        return;
+      }
+
+      if (!parsed.concepts || parsed.concepts.length === 0) {
+        console.log('[Capture] No learning concepts detected, skipping capture');
+        return;
+      }
+
+      // Capture to backend
+      const uid = userId || user?.id;
+      if (!uid) return;
+
+      await captureSession({
+        userId: uid,
+        title: parsed.summary || 'Chat learning session',
+        concepts: parsed.concepts,
+        gaps: parsed.concepts.filter(c => c.is_gap),
+        summary: parsed.summary || '',
+        duration: 5,
+      });
+
+      console.log(`[Capture] Saved ${parsed.concepts.length} concepts to backend`);
+    } catch (err) {
+      console.error('[Capture] Background extraction failed:', err.message);
+    }
+  }
+
+  // Handle spaced review flow
+  async function handleReviewResponse(userText) {
+    if (!reviewMode) return false;
+
+    const lower = userText.toLowerCase();
+
+    // User is responding to a review question
+    if (reviewMode.question) {
+      // Let Claude evaluate the answer
+      setIsTyping(true);
+      try {
+        const evalResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": CLAUDE_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({
+            model: HAIKU_MODEL,
+            max_tokens: 512,
+            system: `You are evaluating a spaced review answer about "${reviewMode.concept}". Rate it 0-5 (SM-2 scale: 0=complete blank, 3=correct with difficulty, 5=perfect). Respond with JSON: { rating: number, feedback: string }`,
+            messages: [
+              { role: "user", content: `Question: ${reviewMode.question}\nAnswer: ${userText}` },
+            ],
+          }),
+        });
+
+        let rating = 3;
+        let feedback = "Got it! Let's keep going.";
+
+        if (evalResponse.ok) {
+          const evalData = await evalResponse.json();
+          const evalText = evalData.content?.[0]?.text || '';
+          try {
+            const jsonMatch = evalText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, evalText];
+            const parsed = JSON.parse(jsonMatch[1].trim());
+            rating = parsed.rating ?? 3;
+            feedback = parsed.feedback || feedback;
+          } catch {
+            // use defaults
+          }
+        }
+
+        // Save review result to backend
+        const uid = userId || user?.id;
+        if (uid) {
+          completeReview(uid, reviewMode.concept, rating).catch(err =>
+            console.error('[Review] Failed to save:', err.message)
+          );
+        }
+
+        const ratingEmoji = rating >= 4 ? 'Excellent!' : rating >= 3 ? 'Good.' : 'No worries, we will review again soon.';
+
+        // Check if there are more reviews
+        const reviewsDue = context?.reviews_due || [];
+        const nextIndex = (reviewMode.index || 0) + 1;
+
+        let replyContent = `${ratingEmoji} ${feedback}`;
+
+        if (nextIndex < reviewsDue.length) {
+          const nextReview = reviewsDue[nextIndex];
+          const nextConcept = nextReview.concept_name || nextReview.name || nextReview;
+          replyContent += `\n\nNext up: **${nextConcept}**. What do you know about ${nextConcept}?`;
+          setReviewMode({ concept: nextConcept, question: `What do you know about ${nextConcept}?`, index: nextIndex });
+        } else {
+          replyContent += '\n\nAll reviews done! Your memory is getting stronger. What else would you like to work on?';
+          setReviewMode(null);
+        }
+
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          role: "peraasan",
+          content: replyContent,
+          timestamp: new Date(),
+        }]);
+      } catch (err) {
+        console.error('[Review] Evaluation failed:', err.message);
+        setReviewMode(null);
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          role: "peraasan",
+          content: "Review recorded! What else would you like to work on?",
+          timestamp: new Date(),
+        }]);
+      }
+      setIsTyping(false);
+      return true;
+    }
+
+    return false;
+  }
+
+  // Start the review flow
+  function startReviewFlow() {
+    const reviewsDue = context?.reviews_due || [];
+    if (reviewsDue.length === 0) return;
+
+    const first = reviewsDue[0];
+    const conceptName = first.concept_name || first.name || first;
+    const question = `What do you know about ${conceptName}?`;
+
+    setReviewMode({ concept: conceptName, question, index: 0 });
+
+    setMessages(prev => [...prev, {
+      id: Date.now() + 1,
+      role: "peraasan",
+      content: `Let's review! First up: **${conceptName}**.\n\n${question}`,
+      timestamp: new Date(),
+    }]);
+  }
 
   async function sendMessage(text) {
     if (!text.trim()) return;
@@ -65,6 +299,21 @@ export default function ChatPanel({ onContextChange, userName }) {
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+
+    // Check if user wants to start review
+    const lower = text.trim().toLowerCase();
+    const reviewsDue = context?.reviews_due || [];
+    if (!reviewMode && reviewsDue.length > 0 && (lower === 'yes' || lower === 'review' || lower === 'sure' || lower === "let's review" || lower === "knock them out" || lower === 'yeah')) {
+      startReviewFlow();
+      return;
+    }
+
+    // Check if user is responding to a review question
+    if (reviewMode) {
+      const handled = await handleReviewResponse(text.trim());
+      if (handled) return;
+    }
+
     setIsTyping(true);
 
     try {
@@ -74,6 +323,8 @@ export default function ChatPanel({ onContextChange, userName }) {
         content: m.content,
       }));
       conversationHistory.push({ role: "user", content: text.trim() });
+
+      const systemPrompt = buildSystemPrompt(userName, context);
 
       // Call Claude API directly
       const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -87,7 +338,7 @@ export default function ChatPanel({ onContextChange, userName }) {
         body: JSON.stringify({
           model: CLAUDE_MODEL,
           max_tokens: 1024,
-          system: SYSTEM_PROMPT + `\n\nThe employee's name is ${userName || "there"}.`,
+          system: systemPrompt,
           messages: conversationHistory,
         }),
       });
@@ -102,6 +353,9 @@ export default function ChatPanel({ onContextChange, userName }) {
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, peraasanMsg]);
+
+        // Background: extract concepts and capture to backend
+        extractAndCapture(text.trim(), replyText);
       } else {
         const fallback = generateResponse(text.trim());
         setMessages((prev) => [...prev, fallback]);
@@ -115,10 +369,10 @@ export default function ChatPanel({ onContextChange, userName }) {
     setIsTyping(false);
 
     // Update context panel based on conversation
-    const lower = text.toLowerCase();
-    if (lower.includes("progress") || lower.includes("readiness")) {
+    const lowerCtx = text.toLowerCase();
+    if (lowerCtx.includes("progress") || lowerCtx.includes("readiness")) {
       onContextChange({ type: "progress" });
-    } else if (lower.includes("learn") || lower.includes("kubernetes") || lower.includes("next")) {
+    } else if (lowerCtx.includes("learn") || lowerCtx.includes("kubernetes") || lowerCtx.includes("next")) {
       onContextChange({ type: "learning_path" });
     }
   }
@@ -201,8 +455,8 @@ export default function ChatPanel({ onContextChange, userName }) {
           goal: "Cloud Architect",
           readiness: 62,
           trend: "rising",
-          concepts: 42,
-          gaps: 3,
+          concepts: context?.knowledge?.total_concepts || 42,
+          gaps: context?.knowledge?.gaps || 3,
           streak: 8,
           topGap: "Kubernetes Networking",
         }],

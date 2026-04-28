@@ -23,6 +23,10 @@ export default function SourcesNav() {
   const [scanResult, setScanResult] = useState(null);
   const [careerScanning, setCareerScanning] = useState(false);
   const [careerResult, setCareerResult] = useState(null);
+  const [predigestUrl, setPredigestUrl] = useState("");
+  const [predigesting, setPredigesting] = useState(false);
+  const [predigestResult, setPredigestResult] = useState(null);
+  const [predigestOpen, setPredigestOpen] = useState(false);
   const connectedCount = sources.filter((s) => s.connected).length;
   const { openUserProfile, signOut } = useClerk();
   const { user } = useUser();
@@ -75,6 +79,33 @@ export default function SourcesNav() {
       setCareerResult({ error: err.message });
     }
     setCareerScanning(false);
+  }
+
+  async function handlePredigest() {
+    const url = predigestUrl.trim();
+    if (!url) return;
+    setPredigesting(true);
+    setPredigestResult(null);
+    try {
+      const result = await agent.predigestDoc({
+        url,
+        learnerContext: { goal: "Become a Cloud Architect" },
+      });
+      setPredigestResult(result);
+      if (!result.error) {
+        const summary = `Read it for you. Here's the pre-digested version of "${result.title}" — TL;DR + ${result.key_concepts?.length || 0} key concepts, saves you about ${result.reading_time_saved_minutes || 15} minutes.`;
+        window.dispatchEvent(new CustomEvent("aasan:digest", {
+          detail: {
+            messageContent: summary,
+            card: { type: "predigest", ...result },
+          },
+        }));
+        setPredigestUrl("");
+      }
+    } catch (err) {
+      setPredigestResult({ error: err.message });
+    }
+    setPredigesting(false);
   }
 
   async function handleSeed() {
@@ -373,6 +404,79 @@ export default function SourcesNav() {
 
         {careerResult?.error && (
           <p className="mt-2 text-[10px] text-red-600">Error: {careerResult.error}</p>
+        )}
+      </div>
+
+      {/* V3: Pre-digest — third Perplexity Computer use case */}
+      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-purple-50/40 to-transparent">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+          <p className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ PRE-DIGEST A DOC</p>
+        </div>
+        <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
+          Paste a long doc URL. Perplexity Computer reads it deeply, Claude extracts 5 key concepts.
+        </p>
+        {!predigestOpen && !predigestResult && (
+          <button
+            onClick={() => setPredigestOpen(true)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-all"
+          >
+            ⚙ Paste a URL
+          </button>
+        )}
+        {(predigestOpen || predigestResult) && (
+          <div className="space-y-1.5">
+            <input
+              type="url"
+              value={predigestUrl}
+              onChange={(e) => setPredigestUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handlePredigest();
+              }}
+              disabled={predigesting}
+              placeholder="https://..."
+              className="w-full px-2.5 py-2 rounded-lg text-[11px] border border-purple-200 focus:border-purple-500 focus:outline-none disabled:bg-gray-50"
+            />
+            <div className="flex gap-1.5">
+              <button
+                onClick={handlePredigest}
+                disabled={predigesting || !predigestUrl.trim()}
+                className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+                  predigesting
+                    ? "bg-purple-100 text-purple-400 cursor-wait"
+                    : !predigestUrl.trim()
+                    ? "bg-purple-200 text-purple-400 cursor-not-allowed"
+                    : "bg-purple-600 text-white hover:bg-purple-700"
+                }`}
+              >
+                {predigesting ? "Reading..." : "⚙ Pre-digest"}
+              </button>
+              <button
+                onClick={() => {
+                  setPredigestOpen(false);
+                  setPredigestResult(null);
+                  setPredigestUrl("");
+                }}
+                className="px-2.5 py-2 rounded-lg text-[11px] text-gray-500 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {predigestResult && !predigestResult.error && (
+          <div className="mt-2.5 px-2.5 py-2 rounded-lg bg-purple-50 border border-purple-100">
+            <p className="text-[10px] text-purple-700 font-semibold tracking-wider mb-0.5">
+              ✓ Digest delivered to chat
+            </p>
+            <p className="text-[10px] text-gray-500 leading-snug">
+              {predigestResult.key_concepts?.length || 0} concepts · saves ~
+              {predigestResult.reading_time_saved_minutes || 15} min
+            </p>
+          </div>
+        )}
+        {predigestResult?.error && (
+          <p className="mt-2 text-[10px] text-red-600">Error: {predigestResult.error}</p>
         )}
       </div>
 

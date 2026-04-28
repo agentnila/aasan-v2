@@ -56,6 +56,9 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "career_digest" && (
                 <CareerDigestCard card={card} onAction={onAction} />
               )}
+              {card.type === "predigest" && (
+                <PredigestCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -456,6 +459,68 @@ function CareerDigestCard({ card, onAction }) {
       <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-purple-100">
         <span className="text-[9px] text-gray-400">Powered by</span>
         <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
+      </div>
+    </div>
+  );
+}
+
+function PredigestCard({ card, onAction }) {
+  const concepts = card.key_concepts || [];
+  return (
+    <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/40 to-white p-4 max-w-[480px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ PRE-DIGESTED · DEEP READ</span>
+      </div>
+      <p className="text-[13px] font-semibold text-text-primary leading-tight">{card.title}</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 truncate">{card.source_domain}</p>
+
+      <div className="mt-3 px-3 py-2 rounded-lg bg-white/70 border border-purple-100">
+        <p className="text-[10px] text-purple-700 font-bold tracking-wider mb-1">TL;DR</p>
+        <p className="text-[12px] text-text-primary leading-snug">{card.tldr}</p>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[10px] text-gray-400 font-bold tracking-wider mb-1.5">
+          {concepts.length} KEY CONCEPTS
+          {card.reading_time_saved_minutes && (
+            <span className="text-purple-600 normal-case font-normal ml-2">
+              · saves you ~{card.reading_time_saved_minutes} min
+            </span>
+          )}
+        </p>
+        <div className="space-y-1.5">
+          {concepts.map((c, i) => (
+            <div key={i} className="px-3 py-2 rounded-lg bg-white border border-purple-100">
+              <div className="flex items-start gap-2 mb-0.5">
+                <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[8px] font-bold tracking-wider shrink-0">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="text-[12px] font-semibold text-text-primary leading-tight flex-1">
+                  {c.name}
+                </span>
+                {c.importance != null && (
+                  <span className="text-[9px] text-purple-600 font-mono shrink-0">
+                    {(c.importance * 100).toFixed(0)}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-600 leading-snug mt-1">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {card.suggested_next_step && (
+        <div className="mt-3 px-3 py-2 rounded-lg bg-navy/5 border border-navy/20">
+          <p className="text-[10px] text-navy font-bold tracking-wider mb-0.5">SUGGESTED NEXT STEP</p>
+          <p className="text-[12px] text-text-primary leading-snug">{card.suggested_next_step}</p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-purple-100">
+        <span className="text-[9px] text-gray-400">Powered by</span>
+        <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
+        <ModeBadge mode={card.modes?.classifier} label="Claude" />
       </div>
     </div>
   );

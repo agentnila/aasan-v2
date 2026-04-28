@@ -220,6 +220,37 @@ export async function checkFreshness({ sourceUrl, baselineText, baselineHash, co
 }
 
 /**
+ * Pre-digest a long URL — Perplexity Computer reads it deeply, Claude extracts
+ * a structured 5-concept digest + TL;DR + suggested next step.
+ *
+ * @param url             The URL to pre-digest
+ * @param learnerContext  Optional { goal, current_path_step, etc. } for tailoring
+ * @returns {
+ *   url, title, source_domain,
+ *   tldr, key_concepts: [{ name, body, importance }, ...],
+ *   reading_time_saved_minutes,
+ *   suggested_next_step,
+ *   modes: { computer, classifier },
+ *   fetched_at,
+ * }
+ */
+export async function predigestDoc({ url, learnerContext } = {}) {
+  if (!url) return { error: "url is required" }
+  try {
+    const res = await fetch(`${RENDER_URL}/agent/predigest`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ url, learner_context: learnerContext || {} }),
+    })
+    if (res.status === 404) return _stubPredigest(url)
+    if (!res.ok) return _stubPredigest(url, `backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubPredigest(url, err.message)
+  }
+}
+
+/**
  * Career Compass — full scan across role market, course launches, vendor certs.
  * Backend orchestrates three Perplexity Computer scrape_pattern jobs and
  * surfaces ranked Career_Signals.
@@ -304,6 +335,25 @@ function _stubFreshnessSingle(sourceUrl, errorMsg = null) {
     current_hash: 'stub-' + sourceUrl.slice(-8),
     fetched_at: new Date().toISOString(),
     metadata: { _client_stub: true },
+  }
+}
+
+function _stubPredigest(url, errorMsg = null) {
+  return {
+    url,
+    title: '[Client stub] Pre-digested document',
+    source_domain: url.replace(/^https?:\/\//, '').split('/')[0],
+    tldr: `Backend /agent/predigest not yet deployed (${errorMsg || '404'}). When deployed, Perplexity Computer reads ${url} deeply and Claude returns a structured 5-concept digest.`,
+    key_concepts: [
+      { name: 'Concept 1', body: 'First key idea from the source.', importance: 0.9 },
+      { name: 'Concept 2', body: 'Second key idea.', importance: 0.8 },
+      { name: 'Concept 3', body: 'Third key idea.', importance: 0.7 },
+    ],
+    reading_time_saved_minutes: 15,
+    suggested_next_step: 'Want a 5-min deep-dive on the first concept?',
+    modes: { computer: 'client_stub', classifier: 'client_stub' },
+    fetched_at: new Date().toISOString(),
+    _client_stub_reason: errorMsg || 'Backend /agent/predigest not yet deployed',
   }
 }
 
@@ -440,6 +490,7 @@ const agent = {
   checkFreshness,
   runCurrencyScan,
   runCareerScan,
+  predigestDoc,
 }
 
 export default agent

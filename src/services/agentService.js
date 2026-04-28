@@ -220,6 +220,93 @@ export async function checkFreshness({ sourceUrl, baselineText, baselineHash, co
 }
 
 // ─────────────────────────────────────────────
+// SME Marketplace — V3
+// Internal directory + external curated marketplace + booking
+// ─────────────────────────────────────────────
+
+export async function findSMEs(topic, learnerId, limit = 5) {
+  if (!topic) return { error: 'topic required' }
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/find`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ topic, learner_id: learnerId || 'demo-user', limit }),
+    })
+    if (res.status === 404) return _stubFindSMEs(topic)
+    if (!res.ok) return _stubFindSMEs(topic, `backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubFindSMEs(topic, err.message)
+  }
+}
+
+export async function bookSME(smeId, learnerId, topic, slot) {
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/book`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ sme_id: smeId, learner_id: learnerId || 'demo-user', topic, slot }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+function _stubFindSMEs(topic, errorMsg = null) {
+  const matches = [
+    {
+      sme_id: 'external-1', sme_type: 'external', name: 'Maya Patel',
+      role: 'Independent Service Mesh Consultant',
+      match_topic: topic, match_mastery: 0.95, match_score: 0.931,
+      rate_per_30min: 40, rate_currency: 'usd', languages: ['en', 'hi'],
+      sessions_completed: 87, kudos_score: 4.9, next_available: 'in ~90 min',
+      bio: 'Former Google SRE, now independent consultant.',
+    },
+    {
+      sme_id: 'internal-1', sme_type: 'internal', name: 'David Kim',
+      role: 'Senior Site Reliability Engineer', team: 'Platform Engineering',
+      match_topic: topic, match_mastery: 0.87, match_score: 0.875,
+      recent_activity_days_ago: 2,
+      rate_per_30min: 0, languages: ['en'],
+      sessions_completed: 12, kudos_score: 4.9, next_available: 'Thu 14:00 PT',
+    },
+    {
+      sme_id: 'external-2', sme_type: 'external', name: 'Carlos Rivera',
+      role: 'Kubernetes & Istio Expert',
+      match_topic: topic, match_mastery: 0.88, match_score: 0.845,
+      rate_per_30min: 60, rate_currency: 'usd', languages: ['en', 'es'],
+      sessions_completed: 134, kudos_score: 4.8, next_available: 'tomorrow 10:00 CT',
+      bio: 'CKA + CKAD certified trainer.',
+    },
+    {
+      sme_id: 'external-3', sme_type: 'external', name: 'Alex Park',
+      role: 'K8s contributor (free / kudos-only)',
+      match_topic: topic, match_mastery: 0.82, match_score: 0.771,
+      rate_per_30min: 0, languages: ['en', 'ko'],
+      sessions_completed: 28, kudos_score: 4.7, next_available: 'next Sat 10:00 BST',
+      bio: 'K8s SIG-network contributor.',
+    },
+    {
+      sme_id: 'internal-2', sme_type: 'internal', name: 'Emily Mendez',
+      role: 'Staff Platform Engineer', team: 'Platform Engineering',
+      match_topic: topic, match_mastery: 0.82, match_score: 0.664,
+      recent_activity_days_ago: 7,
+      rate_per_30min: 0, languages: ['en', 'es'],
+      sessions_completed: 6, kudos_score: 4.8, next_available: 'Mon 10:00 ET',
+    },
+  ]
+  return {
+    topic,
+    matched_at: new Date().toISOString(),
+    match_count: matches.length,
+    matches,
+    matches_by_type: { internal: 2, external: 3 },
+    _client_stub_reason: errorMsg || 'Backend /sme/find not yet deployed',
+  }
+}
+
+// ─────────────────────────────────────────────
 // Path Engine — V3 Live Persistent Learning Paths
 // ─────────────────────────────────────────────
 
@@ -607,6 +694,9 @@ const agent = {
   getPath,
   recomputePath,
   insertStepManual,
+  // SME Marketplace
+  findSMEs,
+  bookSME,
 }
 
 export default agent

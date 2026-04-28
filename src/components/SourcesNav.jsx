@@ -29,6 +29,9 @@ export default function SourcesNav() {
   const [predigestOpen, setPredigestOpen] = useState(false);
   const [pathLoading, setPathLoading] = useState(false);
   const [pathLastAction, setPathLastAction] = useState(null);
+  const [smeTopic, setSmeTopic] = useState("Service Mesh");
+  const [smeLoading, setSmeLoading] = useState(false);
+  const [smeLastAction, setSmeLastAction] = useState(null);
   // Agentic stack status — Bridge (sync) + Computer/Claude (async via /agent/status)
   const [bridgeLive, setBridgeLive] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
@@ -111,6 +114,27 @@ export default function SourcesNav() {
       setCareerResult({ error: err.message });
     }
     setCareerScanning(false);
+  }
+
+  async function handleFindSMEs() {
+    const topic = smeTopic.trim();
+    if (!topic) return;
+    setSmeLoading(true);
+    setSmeLastAction("Matching SMEs…");
+    try {
+      const result = await agent.findSMEs(topic, user?.id || "demo-user", 5);
+      const summary = `Found ${result.match_count} SMEs for "${topic}" — ${result.matches_by_type?.internal || 0} internal, ${result.matches_by_type?.external || 0} external.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: {
+          messageContent: summary,
+          card: { type: "sme_match", ...result },
+        },
+      }));
+      setSmeLastAction(`✓ ${result.match_count} matches in chat`);
+    } catch (err) {
+      setSmeLastAction(`Error: ${err.message}`);
+    }
+    setSmeLoading(false);
   }
 
   async function handleShowGoals() {
@@ -611,6 +635,44 @@ export default function SourcesNav() {
         </div>
         {pathLastAction && (
           <p className="mt-2 text-[10px] text-green-700 italic">{pathLastAction}</p>
+        )}
+      </div>
+
+      {/* V3: SME Marketplace V1 */}
+      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-rose-50/40 to-transparent">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          <p className="text-[10px] text-rose-700 font-bold tracking-wider">🤝 SME MARKETPLACE</p>
+        </div>
+        <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
+          When AI isn't enough — find a human. Internal teammates (auto-derived from mastery) + curated external experts.
+        </p>
+        <input
+          type="text"
+          value={smeTopic}
+          onChange={(e) => setSmeTopic(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleFindSMEs();
+          }}
+          disabled={smeLoading}
+          placeholder="topic (e.g. Service Mesh)"
+          className="w-full px-2.5 py-2 mb-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none disabled:bg-gray-50"
+        />
+        <button
+          onClick={handleFindSMEs}
+          disabled={smeLoading || !smeTopic.trim()}
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+            smeLoading
+              ? "bg-rose-100 text-rose-400 cursor-wait"
+              : !smeTopic.trim()
+              ? "bg-rose-200 text-rose-400 cursor-not-allowed"
+              : "bg-rose-600 text-white hover:bg-rose-700"
+          }`}
+        >
+          {smeLoading ? "Matching…" : "🤝 Find an SME"}
+        </button>
+        {smeLastAction && (
+          <p className="mt-2 text-[10px] text-rose-700 italic">{smeLastAction}</p>
         )}
       </div>
 

@@ -65,6 +65,9 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "path_update" && (
                 <PathUpdateCard card={card} onAction={onAction} />
               )}
+              {card.type === "sme_match" && (
+                <SMEMatchCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -624,6 +627,75 @@ function PathUpdateCard({ card, onAction }) {
         <ModeBadge mode={card.mode === "live" ? "live" : "stub"} label="Claude reasoning" />
         <span className="text-[9px] text-gray-400 italic ml-auto">Manual edits are sacred</span>
       </div>
+    </div>
+  );
+}
+
+function SMEMatchCard({ card, onAction }) {
+  const matches = card.matches || [];
+  const internalCount = card.matches_by_type?.internal || 0;
+  const externalCount = card.matches_by_type?.external || 0;
+  return (
+    <div className="rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50/40 to-white p-4 max-w-[520px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-rose-700 font-bold tracking-wider">
+          🤝 SMEs FOR "{card.topic?.toUpperCase()}"
+        </span>
+      </div>
+      <p className="text-[12px] text-text-primary mb-3">
+        <span className="font-semibold">{card.match_count}</span> matches ·
+        <span className="text-rose-700 font-mono ml-2">{internalCount} internal</span> ·
+        <span className="text-rose-700 font-mono ml-1">{externalCount} external</span>
+      </p>
+      <div className="space-y-2">
+        {matches.map((m) => {
+          const isInternal = m.sme_type === "internal";
+          const isFree = !m.rate_per_30min || m.rate_per_30min === 0;
+          return (
+            <div key={m.sme_id} className="px-3 py-2.5 rounded-xl border border-rose-100 bg-white">
+              <div className="flex items-start gap-2 mb-1">
+                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider shrink-0 ${
+                  isInternal ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"
+                }`}>
+                  {isInternal ? "internal" : "external"}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-text-primary leading-tight">{m.name}</p>
+                  <p className="text-[10px] text-gray-500 truncate">{m.role}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] font-mono text-rose-700">{(m.match_mastery * 100).toFixed(0)}</p>
+                  <p className="text-[8px] text-gray-400 uppercase tracking-wider">mastery</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-1.5">
+                <span className={isFree ? "text-green-600 font-semibold" : "text-text-primary font-semibold"}>
+                  {isFree ? "Free / kudos" : `$${m.rate_per_30min}/30min`}
+                </span>
+                <span>·</span>
+                <span>★ {m.kudos_score}</span>
+                <span>·</span>
+                <span>{m.sessions_completed} sessions</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 mt-2">
+                <p className="text-[10px] text-gray-500">Next: <span className="text-text-primary font-medium">{m.next_available}</span></p>
+                <button
+                  onClick={() => onAction && onAction(`Book ${m.name} for ${card.topic}`)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold ${
+                    isInternal ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-purple-600 text-white hover:bg-purple-700"
+                  }`}
+                >
+                  Book
+                </button>
+              </div>
+              {m.bio && <p className="text-[10px] text-gray-500 italic mt-1.5 leading-snug">"{m.bio}"</p>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[9px] text-gray-400 mt-3 italic">
+        Internal SMEs ranked by mastery × recency × opt-in. External by mastery × kudos × availability.
+      </p>
     </div>
   );
 }

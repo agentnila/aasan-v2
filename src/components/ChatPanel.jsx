@@ -112,6 +112,27 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
   const endRef = useRef(null);
   const contextLoadedRef = useRef(false);
 
+  // Listen for agentic digests dispatched from SourcesNav (Currency Watch / Career Compass)
+  // Each one becomes a Peraasan message in the chat with the appropriate digest card.
+  useEffect(() => {
+    function onDigest(e) {
+      const { messageContent, card } = e.detail || {};
+      if (!messageContent || !card) return;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "peraasan",
+          content: messageContent,
+          cards: [card],
+          timestamp: new Date(),
+        },
+      ]);
+    }
+    window.addEventListener("aasan:digest", onDigest);
+    return () => window.removeEventListener("aasan:digest", onDigest);
+  }, []);
+
   // Set initial greeting, update when context loads
   useEffect(() => {
     if (context && !contextLoadedRef.current) {

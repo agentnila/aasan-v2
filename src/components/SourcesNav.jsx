@@ -37,6 +37,17 @@ export default function SourcesNav() {
         maxConcepts: 5,
       });
       setScanResult(result);
+      // Surface the digest in the chat as a Peraasan message
+      const notifications = result.notifications || [];
+      const summary = notifications.length === 0
+        ? `Just ran a Currency Watch scan over ${result.concepts_scanned} of your tracked sources — everything is current. No action needed.`
+        : `Just ran a Currency Watch scan. ${notifications.length} of ${result.concepts_scanned} sources have substantive changes you should know about.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: {
+          messageContent: summary,
+          card: { type: "currency_digest", ...result },
+        },
+      }));
     } catch (err) {
       setScanResult({ error: err.message });
     }
@@ -52,6 +63,14 @@ export default function SourcesNav() {
         maxSignals: 7,
       });
       setCareerResult(result);
+      // Surface the digest in the chat
+      const summary = `Your weekly Career Compass digest — ${result.signals_count} signals for ${result.target_role}. Top picks below.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: {
+          messageContent: summary,
+          card: { type: "career_digest", ...result },
+        },
+      }));
     } catch (err) {
       setCareerResult({ error: err.message });
     }

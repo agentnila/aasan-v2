@@ -50,6 +50,12 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "focus_start" && (
                 <FocusStartCard card={card} onAction={onAction} />
               )}
+              {card.type === "currency_digest" && (
+                <CurrencyDigestCard card={card} onAction={onAction} />
+              )}
+              {card.type === "career_digest" && (
+                <CareerDigestCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -320,3 +326,138 @@ function FocusStartCard({ card, onAction }) {
     </div>
   );
 }
+
+function ModeBadge({ mode, label }) {
+  const live = mode === 'live';
+  const stub = mode === 'stub' || mode === 'client_stub';
+  const wrapClass = `text-[9px] font-mono px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
+    live
+      ? 'bg-green-50 text-green-700 border border-green-200'
+      : stub
+      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+      : 'bg-gray-50 text-gray-500 border border-gray-200'
+  }`;
+  const dotClass = `w-1 h-1 rounded-full ${
+    live ? 'bg-green-500' : stub ? 'bg-amber-500' : 'bg-gray-400'
+  }`;
+  return (
+    <span className={wrapClass}>
+      <span className={dotClass} />
+      {label}: {live ? 'live' : stub ? 'stub' : '?'}
+    </span>
+  );
+}
+
+function CurrencyDigestCard({ card, onAction }) {
+  const verdicts = card.verdicts || [];
+  const notifications = card.notifications || [];
+  const breaking = notifications.filter(v => v.category === 'breaking');
+  const substantive = notifications.filter(v => v.category === 'substantive');
+  const noChange = verdicts.filter(v => !v.should_notify);
+
+  return (
+    <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/40 to-white p-4 max-w-[480px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ CURRENCY WATCH · JUST RAN</span>
+      </div>
+      <p className="text-[12px] text-text-primary mb-3">
+        <span className="font-semibold">{card.concepts_scanned}</span> sources checked ·{' '}
+        <span className="font-semibold text-purple-700">{notifications.length}</span> need your attention
+      </p>
+
+      {breaking.length > 0 && (
+        <div className="space-y-1.5 mb-2">
+          {breaking.map((v, i) => (
+            <div key={i} className="px-3 py-2 rounded-lg bg-red-50 border border-red-200">
+              <div className="flex items-start gap-2 mb-0.5">
+                <span className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[8px] font-bold tracking-wider shrink-0">BREAKING</span>
+                <span className="text-[12px] font-semibold text-text-primary leading-tight">{v.concept_name}</span>
+              </div>
+              <p className="text-[11px] text-gray-600 leading-snug mt-1">{v.summary}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {substantive.length > 0 && (
+        <div className="space-y-1.5 mb-2">
+          {substantive.map((v, i) => (
+            <div key={i} className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+              <div className="flex items-start gap-2 mb-0.5">
+                <span className="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[8px] font-bold tracking-wider shrink-0">SUBSTANTIVE</span>
+                <span className="text-[12px] font-semibold text-text-primary leading-tight">{v.concept_name}</span>
+              </div>
+              <p className="text-[11px] text-gray-600 leading-snug mt-1">{v.summary}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {noChange.length > 0 && (
+        <p className="text-[10px] text-gray-400 mt-2 italic">
+          ✓ {noChange.length} other source{noChange.length > 1 ? 's' : ''} unchanged or only cosmetic edits — silently absorbed.
+        </p>
+      )}
+
+      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-purple-100">
+        <span className="text-[9px] text-gray-400">Powered by</span>
+        <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
+        <ModeBadge mode={card.modes?.classifier} label="Claude" />
+      </div>
+    </div>
+  );
+}
+
+function CareerDigestCard({ card, onAction }) {
+  const signals = card.signals || [];
+
+  return (
+    <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/40 to-white p-4 max-w-[480px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ CAREER COMPASS · WEEKLY DIGEST</span>
+      </div>
+      <p className="text-[12px] text-text-primary mb-3">
+        <span className="font-semibold">{card.signals_count}</span> signals for{' '}
+        <span className="font-semibold text-purple-700">{card.target_role}</span> ·{' '}
+        {card.signals_by_type?.role_skill_shift || 0} role · {card.signals_by_type?.new_course || 0} courses ·{' '}
+        {card.signals_by_type?.vendor_cert || 0} certs
+      </p>
+
+      <div className="space-y-1.5">
+        {signals.slice(0, 5).map((s, i) => {
+          const typeBadge = {
+            role_skill_shift: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'role' },
+            new_course: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'course' },
+            vendor_cert: { bg: 'bg-green-100', text: 'text-green-800', label: 'cert' },
+          }[s.signal_type] || { bg: 'bg-gray-100', text: 'text-gray-700', label: s.signal_type };
+          return (
+            <div key={i} className="px-3 py-2 rounded-lg bg-white border border-purple-100">
+              <div className="flex items-start gap-2 mb-0.5">
+                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider shrink-0 ${typeBadge.bg} ${typeBadge.text}`}>
+                  {typeBadge.label}
+                </span>
+                <span className="text-[12px] font-semibold text-text-primary leading-tight flex-1">
+                  {s.title}
+                </span>
+                <span className="text-[9px] text-purple-600 font-mono shrink-0">
+                  {(s.relevance_score * 100).toFixed(0)}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-600 leading-snug mt-1">{s.body}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {signals.length > 5 && (
+        <p className="text-[10px] text-gray-400 mt-2 italic">+ {signals.length - 5} more signals</p>
+      )}
+
+      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-purple-100">
+        <span className="text-[9px] text-gray-400">Powered by</span>
+        <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
+      </div>
+    </div>
+  );
+}
+

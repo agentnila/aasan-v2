@@ -220,6 +220,112 @@ export async function checkFreshness({ sourceUrl, baselineText, baselineHash, co
 }
 
 // ─────────────────────────────────────────────
+// Resume Module — V3 living service record + tailored resume
+// ─────────────────────────────────────────────
+
+export async function addJournalEntry(userId, rawInput, structured) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/add`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user', raw_input: rawInput, structured }),
+    })
+    if (res.status === 404) return _stubAddJournal(rawInput)
+    return await res.json()
+  } catch (err) {
+    return _stubAddJournal(rawInput, err.message)
+  }
+}
+
+export async function listJournal(userId, limit = 50) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/journal`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user', limit }),
+    })
+    if (res.status === 404) return _stubJournal()
+    return await res.json()
+  } catch (err) {
+    return _stubJournal(err.message)
+  }
+}
+
+export async function tailorResume(userId, jobUrl, jobDescription) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/tailor`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user', job_url: jobUrl, job_description: jobDescription }),
+    })
+    if (res.status === 404) return _stubTailorResume(jobUrl)
+    return await res.json()
+  } catch (err) {
+    return _stubTailorResume(jobUrl, err.message)
+  }
+}
+
+function _stubAddJournal(rawInput, errorMsg = null) {
+  return {
+    entry: {
+      entry_id: `j-${Date.now()}`,
+      title: rawInput.split('. ')[0]?.slice(0, 100) || 'Journal entry',
+      category: 'project',
+      description: rawInput,
+      outcomes: [],
+      technologies: [],
+      stakeholders: [],
+      transferable_skills: [],
+      raw_input: rawInput,
+      captured_at: new Date().toISOString(),
+      _stub: true,
+    },
+    journal_size: 9,
+    modes: { classifier: 'client_stub' },
+    _client_stub_reason: errorMsg || 'Backend /resume/add not yet deployed',
+  }
+}
+
+function _stubJournal(errorMsg = null) {
+  return {
+    user_id: 'demo-user',
+    entry_count: 8,
+    by_category: { project: 2, mentoring: 1, crisis_response: 1, presentation: 1, customer: 1, tech_adoption: 1, documentation: 1 },
+    entries: [],
+    _client_stub_reason: errorMsg || 'Backend /resume/journal not yet deployed',
+  }
+}
+
+function _stubTailorResume(jobUrl, errorMsg = null) {
+  return {
+    job_url: jobUrl,
+    job_title: 'Senior SRE',
+    job_company: 'Datadog',
+    match_score: 0.78,
+    tailored_summary: 'Senior Software Engineer with 4 years building production cloud infrastructure. Track record includes shipping multi-region failover, leading critical incident response, and adopting platform technologies. Strong cross-team coordination and mentoring experience. Match for this role: 78%.',
+    highlighted_projects: [
+      { title: 'Led incident response for the Stripe API outage', date: '2026-03-12', category: 'crisis_response', match_score: 0.85, match_reason: 'Skill overlap: Crisis leadership · Category: crisis_response (often valued for SRE roles)', outcomes: ['Restored service in 47 min (SLA: 60 min)', 'Identified root cause: rate limiter misconfiguration', 'Post-mortem actions adopted org-wide'], technologies: ['PagerDuty', 'Datadog', 'AWS'] },
+      { title: 'Shipped multi-region failover for primary API', date: '2026-04-15', category: 'project', match_score: 0.72, match_reason: 'Tech overlap: AWS Route 53, Aurora Global · Skill overlap: Production operations', outcomes: ['Reduced RTO from 30 min → 4 min', 'Zero downtime during rollout'], technologies: ['AWS Route 53', 'Aurora Global', 'Terraform', 'Kubernetes'] },
+      { title: 'Wrote on-call escalation runbook', date: '2025-12-15', category: 'documentation', match_score: 0.68, match_reason: 'Skill overlap: Process design · Operational thinking', outcomes: ['Used by team of 8 every on-call shift', 'Cut Sev-1 escalation time 12→4 min'], technologies: ['Confluence', 'PagerDuty'] },
+    ],
+    key_outcomes_to_emphasize: ['Restored service in 47 min (SLA: 60 min)', 'Reduced RTO from 30 min → 4 min', 'Cut Sev-1 escalation time 12→4 min', 'Saved ~$12K/month within 3 months', 'Onboarding time-to-productive 8→4 weeks'],
+    relevant_tech: ['AWS', 'Datadog', 'Kubernetes', 'PagerDuty', 'Terraform', 'Aurora Global', 'AWS Route 53'],
+    transferable_skills: ['Crisis leadership', 'Production operations', 'Cross-team coordination', 'Mentoring', 'Process design'],
+    gaps_vs_job: [
+      'Direct people management experience (you have led projects but not had direct reports)',
+      'Public conference talks (no entries in journal show this)',
+      'Open-source contributions (none in journal — start one to fix this gap)',
+    ],
+    experiences_to_emphasize: [
+      'Lead with the Stripe outage incident response — strongest credibility moment for senior SRE roles',
+      'Quantify the cost-reporting tool savings ($12K/month) — recruiters skim for $ figures',
+    ],
+    modes: { computer: 'client_stub', classifier: 'client_stub' },
+    _client_stub_reason: errorMsg || 'Backend /resume/tailor not yet deployed',
+  }
+}
+
+// ─────────────────────────────────────────────
 // Career Compass · Stay Ahead — V3 mobility intelligence
 // ─────────────────────────────────────────────
 
@@ -821,6 +927,10 @@ const agent = {
   // Career Compass family
   runStayAhead,
   runScenarioSimulation,
+  // Resume module
+  addJournalEntry,
+  listJournal,
+  tailorResume,
 }
 
 export default agent

@@ -36,6 +36,11 @@ export default function SourcesNav() {
   const [smeTopic, setSmeTopic] = useState("Service Mesh");
   const [smeLoading, setSmeLoading] = useState(false);
   const [smeLastAction, setSmeLastAction] = useState(null);
+  const [resumeMode, setResumeMode] = useState(null); // null | "add" | "tailor"
+  const [resumeText, setResumeText] = useState("");
+  const [resumeLoading, setResumeLoading] = useState(false);
+  const [resumeStatus, setResumeStatus] = useState(null);
+  const [resumeJournalCount, setResumeJournalCount] = useState(8);
   // Agentic stack status — Bridge (sync) + Computer/Claude (async via /agent/status)
   const [bridgeLive, setBridgeLive] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
@@ -118,6 +123,48 @@ export default function SourcesNav() {
       setCareerResult({ error: err.message });
     }
     setCareerScanning(false);
+  }
+
+  async function handleResumeSubmit() {
+    const text = resumeText.trim();
+    if (!text) return;
+    setResumeLoading(true);
+    if (resumeMode === "add") {
+      setResumeStatus("Adding to your service record…");
+      try {
+        const result = await agent.addJournalEntry(user?.id || "demo-user", text);
+        setResumeJournalCount(result.journal_size || resumeJournalCount + 1);
+        const summary = `Logged in your service record: "${result.entry?.title || text.slice(0, 60)}"`;
+        window.dispatchEvent(new CustomEvent("aasan:digest", {
+          detail: { messageContent: summary, card: { type: "journal_added", ...result } },
+        }));
+        setResumeStatus(`✓ Added · ${result.journal_size || resumeJournalCount + 1} entries total`);
+        setResumeText("");
+        setResumeMode(null);
+      } catch (err) {
+        setResumeStatus(`Error: ${err.message}`);
+      }
+    } else if (resumeMode === "tailor") {
+      setResumeStatus("Reading job posting + tailoring resume…");
+      try {
+        const isUrl = /^https?:\/\//.test(text);
+        const result = await agent.tailorResume(
+          user?.id || "demo-user",
+          isUrl ? text : "",
+          isUrl ? "" : text,
+        );
+        const summary = `Tailored resume for ${result.job_title} @ ${result.job_company} — ${Math.round((result.match_score || 0) * 100)}% match. ${result.highlighted_projects?.length || 0} projects highlighted from your record.`;
+        window.dispatchEvent(new CustomEvent("aasan:digest", {
+          detail: { messageContent: summary, card: { type: "tailored_resume", ...result } },
+        }));
+        setResumeStatus("✓ Tailored resume in chat");
+        setResumeText("");
+        setResumeMode(null);
+      } catch (err) {
+        setResumeStatus(`Error: ${err.message}`);
+      }
+    }
+    setResumeLoading(false);
   }
 
   async function handleFindSMEs() {
@@ -751,6 +798,108 @@ export default function SourcesNav() {
         </button>
         {smeLastAction && (
           <p className="mt-2 text-[10px] text-rose-700 italic">{smeLastAction}</p>
+        )}
+      </div>
+
+      {/* V3: Resume Module — living service record + tailored resume */}
+      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-emerald-50/40 to-transparent">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <p className="text-[10px] text-emerald-700 font-bold tracking-wider">📋 RESUME · SERVICE RECORD</p>
+          <span className="ml-auto text-[9px] font-mono text-emerald-700">{resumeJournalCount}</span>
+        </div>
+        <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
+          Your living service record. Tell Peraasan what you did. When a job posting lands, get a tailored resume drawn from your real entries.
+        </p>
+
+        {!resumeMode && (
+          <div className="space-y-1.5">
+            <button
+              onClick={() => { setResumeMode("add"); setResumeStatus(null); }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              ✍ Log a work entry
+            </button>
+            <button
+              onClick={() => { setResumeMode("tailor"); setResumeStatus(null); }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            >
+              📝 Tailor a resume to a job
+            </button>
+          </div>
+        )}
+
+        {resumeMode === "add" && (
+          <div className="space-y-1.5">
+            <textarea
+              value={resumeText}
+              onChange={(e) => setResumeText(e.target.value)}
+              disabled={resumeLoading}
+              placeholder='e.g. "Just shipped the new caching layer. Reduced p95 latency from 200ms to 80ms. Presented results to the platform team."'
+              rows={4}
+              className="w-full px-2.5 py-2 rounded-lg text-[11px] border border-emerald-200 focus:border-emerald-500 focus:outline-none resize-none disabled:bg-gray-50"
+            />
+            <div className="flex gap-1.5">
+              <button
+                onClick={handleResumeSubmit}
+                disabled={resumeLoading || !resumeText.trim()}
+                className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold ${
+                  resumeLoading
+                    ? "bg-emerald-100 text-emerald-400 cursor-wait"
+                    : !resumeText.trim()
+                    ? "bg-emerald-200 text-emerald-400 cursor-not-allowed"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700"
+                }`}
+              >
+                {resumeLoading ? "Saving…" : "✍ Add to record"}
+              </button>
+              <button
+                onClick={() => { setResumeMode(null); setResumeText(""); setResumeStatus(null); }}
+                className="px-2.5 py-2 rounded-lg text-[11px] text-gray-500 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {resumeMode === "tailor" && (
+          <div className="space-y-1.5">
+            <input
+              type="text"
+              value={resumeText}
+              onChange={(e) => setResumeText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleResumeSubmit(); }}
+              disabled={resumeLoading}
+              placeholder="Paste job URL (or paste the JD)"
+              className="w-full px-2.5 py-2 rounded-lg text-[11px] border border-emerald-200 focus:border-emerald-500 focus:outline-none disabled:bg-gray-50"
+            />
+            <div className="flex gap-1.5">
+              <button
+                onClick={handleResumeSubmit}
+                disabled={resumeLoading || !resumeText.trim()}
+                className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold ${
+                  resumeLoading
+                    ? "bg-emerald-100 text-emerald-400 cursor-wait"
+                    : !resumeText.trim()
+                    ? "bg-emerald-200 text-emerald-400 cursor-not-allowed"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700"
+                }`}
+              >
+                {resumeLoading ? "Tailoring…" : "📝 Tailor resume"}
+              </button>
+              <button
+                onClick={() => { setResumeMode(null); setResumeText(""); setResumeStatus(null); }}
+                className="px-2.5 py-2 rounded-lg text-[11px] text-gray-500 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {resumeStatus && (
+          <p className="mt-2 text-[10px] text-emerald-700 italic">{resumeStatus}</p>
         )}
       </div>
 

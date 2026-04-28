@@ -74,6 +74,12 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "scenario_simulation" && (
                 <ScenarioSimulationCard card={card} onAction={onAction} />
               )}
+              {card.type === "journal_added" && (
+                <JournalAddedCard card={card} onAction={onAction} />
+              )}
+              {card.type === "tailored_resume" && (
+                <TailoredResumeCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -959,6 +965,142 @@ function ScenarioSimulationCard({ card, onAction }) {
         <span className="text-[9px] text-gray-400">Engine:</span>
         <ModeBadge mode={card.modes?.engine} label="Claude reasoning" />
         <span className="text-[9px] text-gray-400 italic ml-auto">Probabilities are projections — your effort changes them</span>
+      </div>
+    </div>
+  );
+}
+
+function JournalAddedCard({ card, onAction }) {
+  const e = card.entry || {};
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/40 to-white p-4 max-w-[480px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-emerald-700 font-bold tracking-wider">📋 ADDED TO YOUR SERVICE RECORD</span>
+        <span className="text-[9px] text-gray-400 ml-auto">Journal: {card.journal_size} entries</span>
+      </div>
+      <p className="text-[13px] font-semibold text-text-primary leading-tight">{e.title}</p>
+      <p className="text-[10px] text-gray-500 mt-0.5">{e.date} · {e.category}</p>
+      {e.outcomes?.length > 0 && (
+        <div className="mt-2.5 px-2.5 py-1.5 rounded bg-white border border-emerald-100">
+          <p className="text-[9px] text-emerald-700 font-bold tracking-wider mb-1">OUTCOMES</p>
+          <ul className="text-[11px] text-text-primary space-y-0.5">
+            {e.outcomes.map((o, i) => <li key={i}>· {o}</li>)}
+          </ul>
+        </div>
+      )}
+      {e.technologies?.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {e.technologies.map((t, i) => (
+            <span key={i} className="px-1.5 py-0.5 rounded bg-gray-100 text-[9px] text-gray-700 font-mono">{t}</span>
+          ))}
+        </div>
+      )}
+      {e.transferable_skills?.length > 0 && (
+        <p className="text-[10px] text-emerald-700 italic mt-2">Tagged skills: {e.transferable_skills.join(' · ')}</p>
+      )}
+      <p className="text-[9px] text-gray-400 italic mt-2">When you next paste a job posting, this entry will be considered for inclusion in your tailored resume.</p>
+    </div>
+  );
+}
+
+function TailoredResumeCard({ card, onAction }) {
+  const projects = card.highlighted_projects || [];
+  const outcomes = card.key_outcomes_to_emphasize || [];
+  const tech = card.relevant_tech || [];
+  const skills = card.transferable_skills || [];
+  const gaps = card.gaps_vs_job || [];
+  const emphasis = card.experiences_to_emphasize || [];
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/40 to-white p-4 max-w-[600px]">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-[10px] text-emerald-700 font-bold tracking-wider">📋 TAILORED RESUME</span>
+        <span className="ml-auto px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold tracking-wider">
+          {Math.round((card.match_score || 0) * 100)}% MATCH
+        </span>
+      </div>
+      <p className="text-[13px] font-semibold text-text-primary leading-tight">{card.job_title}</p>
+      <p className="text-[10px] text-gray-500 mb-3">@ {card.job_company}{card.job_url ? ` · ${card.job_url.slice(0, 60)}…` : ''}</p>
+
+      <div className="px-3 py-2 rounded-lg bg-white border border-emerald-100 mb-3">
+        <p className="text-[9px] text-emerald-700 font-bold tracking-wider mb-1">SUMMARY</p>
+        <p className="text-[11px] text-text-primary leading-snug">{card.tailored_summary}</p>
+      </div>
+
+      <div className="mb-3">
+        <p className="text-[9px] text-emerald-700 font-bold tracking-wider mb-1.5">HIGHLIGHTED PROJECTS (from your service record)</p>
+        <div className="space-y-1.5">
+          {projects.map((p, i) => (
+            <div key={i} className="px-3 py-2 rounded bg-white border border-emerald-100">
+              <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                <p className="text-[12px] font-semibold text-text-primary leading-tight flex-1">{p.title}</p>
+                <span className="text-[9px] font-mono text-emerald-700 shrink-0">{Math.round(p.match_score * 100)}</span>
+              </div>
+              <p className="text-[10px] text-gray-400">{p.date} · {p.category}</p>
+              {p.outcomes?.length > 0 && (
+                <ul className="text-[10px] text-text-primary mt-1 space-y-0.5">
+                  {p.outcomes.slice(0, 2).map((o, j) => <li key={j}>· {o}</li>)}
+                </ul>
+              )}
+              {p.match_reason && <p className="text-[10px] text-emerald-700 italic mt-1">↳ {p.match_reason}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {outcomes.length > 0 && (
+        <div className="mb-3 px-3 py-2 rounded bg-white border border-emerald-100">
+          <p className="text-[9px] text-emerald-700 font-bold tracking-wider mb-1">KEY OUTCOMES TO EMPHASIZE (recruiters skim for these)</p>
+          <ul className="text-[10px] text-text-primary space-y-0.5">
+            {outcomes.map((o, i) => <li key={i}>· {o}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {tech.length > 0 && (
+        <div className="mb-2">
+          <p className="text-[9px] text-gray-500 font-bold tracking-wider mb-1">RELEVANT TECH</p>
+          <div className="flex flex-wrap gap-1">
+            {tech.map((t, i) => (
+              <span key={i} className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-mono">{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {skills.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[9px] text-gray-500 font-bold tracking-wider mb-1">TRANSFERABLE SKILLS</p>
+          <div className="flex flex-wrap gap-1">
+            {skills.map((s, i) => (
+              <span key={i} className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[9px]">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {gaps.length > 0 && (
+        <div className="mb-2 px-3 py-2 rounded bg-amber-50 border border-amber-200">
+          <p className="text-[9px] text-amber-700 font-bold tracking-wider mb-1">⚠ GAPS vs THIS JOB (work on these to strengthen your fit)</p>
+          <ul className="text-[10px] text-text-primary space-y-0.5">
+            {gaps.map((g, i) => <li key={i}>· {g}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {emphasis.length > 0 && (
+        <div className="mb-2 px-3 py-2 rounded bg-navy/5 border border-navy/20">
+          <p className="text-[9px] text-navy font-bold tracking-wider mb-1">📝 RESUME-WRITING TIPS</p>
+          <ul className="text-[10px] text-text-primary space-y-0.5">
+            {emphasis.map((e, i) => <li key={i}>· {e}</li>)}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-emerald-100">
+        <span className="text-[9px] text-gray-400">Powered by</span>
+        <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
+        <ModeBadge mode={card.modes?.classifier} label="Claude" />
+        <span className="text-[9px] text-gray-400 italic ml-auto">Drawn from your living service record</span>
       </div>
     </div>
   );

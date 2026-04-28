@@ -220,6 +220,43 @@ export async function checkFreshness({ sourceUrl, baselineText, baselineHash, co
 }
 
 /**
+ * Career Compass — full scan across role market, course launches, vendor certs.
+ * Backend orchestrates three Perplexity Computer scrape_pattern jobs and
+ * surfaces ranked Career_Signals.
+ *
+ * @param userId        Optional learner ID (Phase 1 uses a hardcoded subscription)
+ * @param targetRole    Optional target role (defaults to "Senior Cloud Architect" for demo)
+ * @param maxSignals    Cap (default 10)
+ * @returns {
+ *   user_id, target_role, scanned_at, signals_count,
+ *   signals_by_type: { role_skill_shift, new_course, vendor_cert },
+ *   signals: [{ signal_type, title, body, relevance_score, content_ref, detected_at }],
+ *   modes: { computer, classifier }
+ * }
+ *
+ * If backend hasn't picked up the new endpoint yet, falls back to JS-side stub
+ * with realistic demo signals.
+ */
+export async function runCareerScan({ userId, targetRole, maxSignals = 10 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/career/scan`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: userId,
+        target_role: targetRole,
+        max_signals: maxSignals,
+      }),
+    })
+    if (res.status === 404) return _stubCareerScan(maxSignals)
+    if (!res.ok) return _stubCareerScan(maxSignals, `backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubCareerScan(maxSignals, err.message)
+  }
+}
+
+/**
  * Currency Watch — full scan over the user's tracked concepts.
  * Backend orchestrates: re-fetch each source, diff, classify, surface verdicts.
  *
@@ -267,6 +304,66 @@ function _stubFreshnessSingle(sourceUrl, errorMsg = null) {
     current_hash: 'stub-' + sourceUrl.slice(-8),
     fetched_at: new Date().toISOString(),
     metadata: { _client_stub: true },
+  }
+}
+
+function _stubCareerScan(maxSignals = 10, errorMsg = null) {
+  const signals = [
+    {
+      signal_type: 'new_course',
+      title: 'LinkedIn Learning: FinOps for Engineers (Foundational)',
+      body: '2 hours · directly relevant to the FinOps demand shift detected for your target role.',
+      relevance_score: 0.95,
+      content_ref: 'stub-linkedin-finops-2026-04',
+      detected_at: new Date().toISOString(),
+    },
+    {
+      signal_type: 'role_skill_shift',
+      title: 'FinOps now required for Senior Cloud Architect at peer companies',
+      body: '47% of postings now require FinOps experience — up from 12% a year ago.',
+      relevance_score: 0.92,
+      content_ref: 'stub-benchmark-finops',
+      detected_at: new Date().toISOString(),
+    },
+    {
+      signal_type: 'new_course',
+      title: 'Anthropic launched: Building Production Agentic Systems',
+      body: '4 hours · 4.8 rating · matches your AI/ML exploration goal.',
+      relevance_score: 0.88,
+      content_ref: 'stub-anthropic-agentic',
+      detected_at: new Date().toISOString(),
+    },
+    {
+      signal_type: 'role_skill_shift',
+      title: "Multi-region resilience moving from 'nice-to-have' to required",
+      body: '31% of postings now require multi-region experience (was 8% in Q3 2025).',
+      relevance_score: 0.85,
+      content_ref: 'stub-benchmark-multiregion',
+      detected_at: new Date().toISOString(),
+    },
+    {
+      signal_type: 'vendor_cert',
+      title: 'AWS announced new SA Pro path with 3 new modules',
+      body: "You've already covered 2 of 3 — third is on cost optimization.",
+      relevance_score: 0.83,
+      content_ref: 'stub-aws-sapro',
+      detected_at: new Date().toISOString(),
+    },
+  ].slice(0, maxSignals)
+
+  return {
+    user_id: 'demo-user',
+    target_role: 'Senior Cloud Architect',
+    scanned_at: new Date().toISOString(),
+    signals_count: signals.length,
+    signals_by_type: {
+      role_skill_shift: signals.filter((s) => s.signal_type === 'role_skill_shift').length,
+      new_course: signals.filter((s) => s.signal_type === 'new_course').length,
+      vendor_cert: signals.filter((s) => s.signal_type === 'vendor_cert').length,
+    },
+    signals,
+    modes: { computer: 'client_stub', classifier: 'client_stub' },
+    _client_stub_reason: errorMsg || 'Backend /career/scan not yet deployed',
   }
 }
 
@@ -342,6 +439,7 @@ const agent = {
   // Capability helpers
   checkFreshness,
   runCurrencyScan,
+  runCareerScan,
 }
 
 export default agent

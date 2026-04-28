@@ -21,6 +21,8 @@ export default function SourcesNav() {
   const [seedDone, setSeedDone] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [careerScanning, setCareerScanning] = useState(false);
+  const [careerResult, setCareerResult] = useState(null);
   const connectedCount = sources.filter((s) => s.connected).length;
   const { openUserProfile, signOut } = useClerk();
   const { user } = useUser();
@@ -39,6 +41,21 @@ export default function SourcesNav() {
       setScanResult({ error: err.message });
     }
     setScanning(false);
+  }
+
+  async function handleCareerScan() {
+    setCareerScanning(true);
+    setCareerResult(null);
+    try {
+      const result = await agent.runCareerScan({
+        userId: user?.id || "demo-user",
+        maxSignals: 7,
+      });
+      setCareerResult(result);
+    } catch (err) {
+      setCareerResult({ error: err.message });
+    }
+    setCareerScanning(false);
   }
 
   async function handleSeed() {
@@ -256,6 +273,87 @@ export default function SourcesNav() {
 
         {scanResult?.error && (
           <p className="mt-2 text-[10px] text-red-600">Error: {scanResult.error}</p>
+        )}
+      </div>
+
+      {/* V3: Career Compass — second Perplexity Computer use case */}
+      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-purple-50/40 to-transparent">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+          <p className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ CAREER COMPASS</p>
+        </div>
+        <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
+          Scrapes job market + course launches + vendor certs via Perplexity Computer. Ranks signals by relevance to your role.
+        </p>
+        <button
+          onClick={handleCareerScan}
+          disabled={careerScanning}
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+            careerScanning
+              ? 'bg-purple-100 text-purple-400 cursor-wait'
+              : 'bg-purple-600 text-white hover:bg-purple-700'
+          }`}
+        >
+          {careerScanning ? '⚙ Scanning market…' : '⚙ Run market watch now'}
+        </button>
+
+        {careerResult && !careerResult.error && (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-baseline justify-between text-[10px]">
+              <span className="text-gray-500 truncate">Role: {careerResult.target_role}</span>
+              <span className="font-mono text-purple-700 shrink-0">
+                {careerResult.signals_count} signals
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1 text-[9px]">
+              <span className="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700">
+                {careerResult.signals_by_type?.role_skill_shift || 0} role
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700">
+                {careerResult.signals_by_type?.new_course || 0} courses
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-green-50 border border-green-200 text-green-700">
+                {careerResult.signals_by_type?.vendor_cert || 0} certs
+              </span>
+            </div>
+            {careerResult._client_stub_reason && (
+              <p className="text-[9px] text-amber-600 italic">
+                Stub mode: {careerResult._client_stub_reason}
+              </p>
+            )}
+            <div className="space-y-1.5 mt-2">
+              {careerResult.signals?.map((s, i) => {
+                const typeBadge = {
+                  role_skill_shift: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'role' },
+                  new_course: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'course' },
+                  vendor_cert: { bg: 'bg-green-100', text: 'text-green-800', label: 'cert' },
+                }[s.signal_type] || { bg: 'bg-gray-100', text: 'text-gray-700', label: s.signal_type };
+                return (
+                  <div
+                    key={i}
+                    className="px-2 py-1.5 rounded border border-purple-100 bg-white/60 text-[10px]"
+                  >
+                    <div className="flex items-start gap-1.5 mb-0.5">
+                      <span className={`px-1 py-0.5 rounded text-[8px] font-bold tracking-wider shrink-0 ${typeBadge.bg} ${typeBadge.text}`}>
+                        {typeBadge.label}
+                      </span>
+                      <span className="font-semibold text-text-primary leading-tight flex-1 min-w-0">
+                        {s.title}
+                      </span>
+                      <span className="text-[9px] text-gray-400 font-mono shrink-0">
+                        {(s.relevance_score * 100).toFixed(0)}
+                      </span>
+                    </div>
+                    <p className="text-gray-600 leading-snug line-clamp-2 mt-1">{s.body}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {careerResult?.error && (
+          <p className="mt-2 text-[10px] text-red-600">Error: {careerResult.error}</p>
         )}
       </div>
 

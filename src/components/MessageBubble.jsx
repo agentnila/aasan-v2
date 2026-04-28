@@ -720,33 +720,82 @@ function StayAheadCard({ card, onAction }) {
   const pivots = card.pivot_options || [];
   const experiences = card.hands_on_experiences || [];
 
-  const aiVulnLevel = ai.vulnerability_level || "unknown";
-  const aiVulnTone =
-    aiVulnLevel.includes("high")
-      ? { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", pill: "bg-red-600 text-white" }
-      : aiVulnLevel.includes("medium")
-      ? { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", pill: "bg-amber-500 text-white" }
-      : { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", pill: "bg-green-600 text-white" };
+  // V3: AI-Resilience SCORE is the headline metric (higher = better)
+  const score = ai.score;
+  const band = ai.band;
+  const tone = ai.band_tone || "green";
+  const toneColors = {
+    green: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", pill: "bg-green-600 text-white", numColor: "text-green-700" },
+    amber: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", pill: "bg-amber-500 text-white", numColor: "text-amber-700" },
+    red: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", pill: "bg-red-600 text-white", numColor: "text-red-700" },
+  }[tone] || { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600", pill: "bg-gray-500 text-white", numColor: "text-gray-700" };
 
   return (
     <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/40 to-white p-4 max-w-[560px]">
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-3">
         <span className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ STAY AHEAD · AI-RESILIENCE + MOBILITY</span>
       </div>
 
-      {/* AI-Resilience — the deepest WHY for Stay Ahead */}
-      {ai.headline && (
-        <div className={`px-3 py-2.5 rounded-lg mb-3 ${aiVulnTone.bg} border ${aiVulnTone.border}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider ${aiVulnTone.pill}`}>
-              🤖 AI VULNERABILITY · {aiVulnLevel.toUpperCase()}
-            </span>
-            {ai.vulnerability_score != null && (
-              <span className={`text-[10px] font-mono ${aiVulnTone.text}`}>
-                {(ai.vulnerability_score * 100).toFixed(0)}/100
-              </span>
-            )}
+      {/* V3 HEADLINE: AI-Resilience Score — big number, always prominent */}
+      {score != null && (
+        <div className={`px-4 py-3 rounded-xl mb-3 ${toneColors.bg} border ${toneColors.border}`}>
+          <div className="flex items-baseline gap-3 mb-1">
+            <span className="text-[10px] text-gray-500 font-bold tracking-wider uppercase">🤖 Your AI-Resilience Score</span>
           </div>
+          <div className="flex items-baseline gap-3">
+            <div className="flex items-baseline gap-0.5">
+              <span className={`text-5xl font-bold leading-none ${toneColors.numColor}`}>{score}</span>
+              <span className="text-base text-gray-400">/100</span>
+            </div>
+            <div className="flex-1">
+              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${toneColors.pill}`}>
+                {(band || "").toUpperCase()}
+              </span>
+              {ai.trend && (
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  <span className={ai.trend.change_last_quarter > 0 ? "text-green-600 font-semibold" : ai.trend.change_last_quarter < 0 ? "text-red-600 font-semibold" : "text-gray-400"}>
+                    {ai.trend.change_last_quarter > 0 ? "↑" : ai.trend.change_last_quarter < 0 ? "↓" : "→"} {ai.trend.change_last_quarter > 0 ? "+" : ""}{ai.trend.change_last_quarter} this quarter
+                  </span>
+                  {ai.peer_benchmark && (
+                    <span className="text-gray-400"> · peers avg {ai.peer_benchmark.peer_avg_score} (p{ai.peer_benchmark.percentile})</span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+          {ai.band_verdict && (
+            <p className={`text-[12px] mt-2 leading-snug ${toneColors.text}`}>{ai.band_verdict}</p>
+          )}
+          {ai.trend?.narrative && (
+            <p className="text-[10px] text-gray-600 italic mt-2 leading-snug">{ai.trend.narrative}</p>
+          )}
+
+          {/* Component breakdown — what makes up the score */}
+          {ai.components?.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-[9px] text-gray-500 font-bold tracking-wider mb-1.5">SCORE COMPONENTS</p>
+              <div className="space-y-1">
+                {ai.components.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[10px] text-text-primary flex-1 truncate">{c.label}</span>
+                    <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden shrink-0">
+                      <div
+                        className={c.score >= 70 ? "h-full bg-green-500" : c.score >= 50 ? "h-full bg-amber-500" : "h-full bg-red-500"}
+                        style={{ width: `${c.score}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-600 w-7 text-right shrink-0">{c.score}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Original AI-vulnerability detail block (back-compat with existing stubs) */}
+      {ai.headline && (
+        <div className={`px-3 py-2.5 rounded-lg mb-3 ${toneColors.bg} border ${toneColors.border}`}>
           <p className="text-[12px] text-text-primary leading-snug">{ai.headline}</p>
 
           {ai.ai_replaced_today?.length > 0 && (

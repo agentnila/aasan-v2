@@ -362,8 +362,40 @@ export async function runScenarioSimulation(userId, scenarios, profile) {
 function _stubStayAhead(errorMsg = null) {
   return {
     ai_resilience: {
-      vulnerability_level: 'low-medium',
+      // V3 headline metric (higher = better)
+      score: 68,
+      score_max: 100,
+      band: 'Stable',
+      band_tone: 'green',
+      band_verdict: 'Well-positioned. A few specific moves keep you ahead of the curve.',
+      trend: {
+        history: [
+          { quarter: 'Q2 2025', score: 58 },
+          { quarter: 'Q3 2025', score: 62 },
+          { quarter: 'Q4 2025', score: 64 },
+          { quarter: 'Q1 2026', score: 66 },
+          { quarter: 'Q2 2026', score: 68 },
+        ],
+        direction: 'rising',
+        change_last_quarter: 2,
+        narrative: 'Your AI-Resilience score went 66 → 68 this quarter — your move into agent-aware architecture work is paying off. Sustained trajectory: +10 over 4 quarters.',
+      },
+      components: [
+        { label: 'Skill demand growth', score: 78, note: 'Cloud Architect demand +18% YoY in your market' },
+        { label: 'AI task replacement risk', score: 62, note: 'Some routine tasks (boilerplate, Terraform drafting) automatable today' },
+        { label: 'Up-the-stack mobility', score: 72, note: 'Architectural judgment + customer-facing decisions are AI-resistant' },
+        { label: 'Geographic + financial mobility', score: 65, note: 'Remote-friendly stack; comp at 75th percentile' },
+        { label: 'Cross-skill versatility', score: 70, note: 'K8s + AWS + Linux + Python + presentation skills' },
+      ],
+      peer_benchmark: {
+        role: 'Senior SWE (cloud track)',
+        peer_avg_score: 58,
+        your_score: 68,
+        delta_vs_peers: 10,
+        percentile: 73,
+      },
       vulnerability_score: 0.32,
+      vulnerability_level: 'low-medium',
       headline: 'Your Senior SWE → Cloud Architect track is RELATIVELY AI-resilient. Architectural judgment, organizational alignment, and customer-facing decisions are the parts AI is NOT taking over. Cloud Architects are needed to DESIGN AI infrastructure — demand growing 22% YoY.',
       ai_replaced_today: [
         'Boilerplate code generation (use AI; don\'t define yourself by it)',

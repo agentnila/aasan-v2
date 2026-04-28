@@ -20,19 +20,24 @@ export default function DemoLanding({ notFound }) {
           {/* Aasan + tagline */}
           <h1 className="font-serif text-5xl font-bold text-navy tracking-tight mt-4">Aasan</h1>
           <p className="text-[10px] text-gold tracking-[0.3em] uppercase mt-2 font-semibold">
-            Est. 2026 · Your Personal University
+            Your Career Operating System
           </p>
 
           {/* Gold rule */}
           <div className="w-12 h-px bg-gold/60 mx-auto my-6" />
 
-          {/* Mission line */}
-          <h2 className="font-serif text-3xl text-text-primary italic leading-snug max-w-2xl mx-auto">
-            Helps you learn. Learns with you.<br />
-            Remembers what you know — for life.
+          {/* The unified question — V3 hero */}
+          <p className="text-[10px] text-gray-400 tracking-[0.2em] uppercase font-semibold mb-3">One question. Answered for you. Personally.</p>
+          <h2 className="font-serif text-3xl text-text-primary leading-snug max-w-2xl mx-auto">
+            <em>How AI-Resilient is your job?</em>
+            <br />
+            And how do you stay not just relevant — but <em>desired</em>?
           </h2>
-          <p className="text-[13px] text-gray-500 mt-3 max-w-xl mx-auto leading-relaxed">
-            The AI learning agent for enterprises. Finds the right content from every source your company has, teaches in conversation, and keeps your knowledge current as the world changes.
+
+          <p className="text-[13px] text-gray-600 mt-5 max-w-2xl mx-auto leading-relaxed">
+            McKinsey publishes aggregates. Aasan answers for <span className="text-text-primary font-semibold">YOU</span> — your role, your skills, your trajectory.
+            In a world where AI, inflation, and geopolitics are all reshaping what "employed" means,
+            Aasan helps you be better at your <span className="text-text-primary font-semibold">current job</span> and ready for your <span className="text-text-primary font-semibold">next one</span> — through continuous learning. Forever.
           </p>
         </div>
 
@@ -41,18 +46,18 @@ export default function DemoLanding({ notFound }) {
           {[
             {
               numeral: 'I.',
-              title: 'Less hunting,\nmore learning.',
-              body: 'Peraasan finds the right content from every source your company has — Coursera, the LMS, your team\'s wiki, the open web — and sequences it into a path tailored to your goal.',
+              title: 'Better at your\ncurrent job.',
+              body: 'Continuous learning across every source your company has. Knowledge captured forever in your private graph. Spaced review keeps it sharp. Currency Watch keeps it true as the world changes.',
             },
             {
               numeral: 'II.',
-              title: 'Captured\nforever.',
-              body: 'Every concept you pick up enters your personal knowledge graph. Spaced review keeps it sharp. Years from now, it\'s still yours — portable, verifiable, never lost.',
+              title: 'Ready for\nyour next one.',
+              body: 'AI-Resilience score for your role. Best-fit jobs you could land today. Stretch roles with explicit "X weeks to ready" paths. Hands-on experiences (adjunct lecturer · OSS · personal AI project) that build real resume signal.',
             },
             {
               numeral: 'III.',
-              title: 'Always\ncurrent.',
-              body: 'When APIs deprecate or your team\'s runbook is rewritten, Peraasan tells you exactly what changed and serves the refresher. Your knowledge stays true.',
+              title: 'Resilient\nforever.',
+              body: 'Living service record built passively through chat. Auto-tailored resume per job posting via Perplexity Computer + Claude. Career scenario planning with probability-ranged outcomes. Insurance against AI, inflation, and the macro forces nobody else helps you navigate.',
             },
           ].map((b) => (
             <div key={b.numeral} className="text-center md:text-left px-1">
@@ -69,11 +74,14 @@ export default function DemoLanding({ notFound }) {
         <div className="mt-12 mb-6 text-center">
           <div className="flex items-center justify-center gap-3 text-[10px] text-gray-400 tracking-[0.25em] uppercase font-semibold">
             <span className="w-8 h-px bg-gray-300" />
-            <span>The story · 10 scenarios · ~15 minutes</span>
+            <span>The vision · 10 scenarios · ~15 minutes</span>
             <span className="w-8 h-px bg-gray-300" />
           </div>
           <p className="text-sm text-gray-500 mt-3 max-w-xl mx-auto leading-relaxed">
             Each scenario shows Peraasan acting <em>for</em> the learner. Watch for the gold <span className="text-gold font-semibold">⚡ agentic moments</span>.
+          </p>
+          <p className="text-[12px] text-gray-400 mt-4 max-w-xl mx-auto leading-relaxed italic">
+            Want to see the <em>live</em> production app instead? <a href="/" className="text-navy underline hover:text-navy/80">aasan-v2.vercel.app</a> has the 9 working agentic loops — Currency Watch, Career Compass, Stay Ahead, Resume tailor, and more.
           </p>
         </div>
 
@@ -104,6 +112,20 @@ export default function DemoLanding({ notFound }) {
               </div>
             </button>
           ))}
+        </div>
+
+        {/* The pitch */}
+        <div className="mt-12 max-w-3xl mx-auto px-6 py-5 rounded-xl bg-white/60 border border-gray-100">
+          <p className="text-[11px] text-gold font-bold tracking-[0.2em] uppercase mb-2">THE PITCH</p>
+          <p className="text-[13px] text-text-primary leading-relaxed">
+            Big firms publish <em>aggregate</em> predictions about the job market — *"30% of jobs will be AI-augmented by 2030."* True. But unactionable.
+          </p>
+          <p className="text-[13px] text-text-primary leading-relaxed mt-2">
+            Aasan answers the same question for the <em>individual</em>: <span className="font-semibold">YOUR AI-Resilience score, YOUR best-fit jobs, YOUR specific moves to stay desired.</span> That precision is the moat.
+          </p>
+          <p className="text-[12px] text-gray-500 leading-relaxed mt-2 italic">
+            Bloomberg terminal vs. personal financial advisor — both have the same data; only one tells you what to do.
+          </p>
         </div>
 
         {/* Footer */}

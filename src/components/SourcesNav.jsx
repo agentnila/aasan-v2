@@ -23,6 +23,10 @@ export default function SourcesNav() {
   const [scanResult, setScanResult] = useState(null);
   const [careerScanning, setCareerScanning] = useState(false);
   const [careerResult, setCareerResult] = useState(null);
+  const [stayAheadLoading, setStayAheadLoading] = useState(false);
+  const [stayAheadStatus, setStayAheadStatus] = useState(null);
+  const [simulating, setSimulating] = useState(false);
+  const [simulateStatus, setSimulateStatus] = useState(null);
   const [predigestUrl, setPredigestUrl] = useState("");
   const [predigesting, setPredigesting] = useState(false);
   const [predigestResult, setPredigestResult] = useState(null);
@@ -178,6 +182,44 @@ export default function SourcesNav() {
       setPathLastAction(`Error: ${err.message}`);
     }
     setPathLoading(false);
+  }
+
+  async function handleStayAhead() {
+    setStayAheadLoading(true);
+    setStayAheadStatus("Scanning market + opportunities…");
+    try {
+      const result = await agent.runStayAhead(user?.id || "demo-user");
+      const summary = `Stay Ahead — career mobility scan. ${result.best_fit_roles?.length || 0} best-fit roles, ${result.stretch_roles?.length || 0} stretch, ${result.pivot_options?.length || 0} pivots, ${result.hands_on_experiences?.length || 0} hands-on experiences.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: {
+          messageContent: summary,
+          card: { type: "stay_ahead", ...result },
+        },
+      }));
+      setStayAheadStatus("✓ Mobility digest in chat");
+    } catch (err) {
+      setStayAheadStatus(`Error: ${err.message}`);
+    }
+    setStayAheadLoading(false);
+  }
+
+  async function handleSimulateScenarios() {
+    setSimulating(true);
+    setSimulateStatus("Projecting outcomes…");
+    try {
+      const result = await agent.runScenarioSimulation(user?.id || "demo-user");
+      const summary = `Career simulation across ${result.scenario_count} scenarios — projected outcomes at 6/12/18 months with probability ranges.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: {
+          messageContent: summary,
+          card: { type: "scenario_simulation", ...result },
+        },
+      }));
+      setSimulateStatus("✓ Simulation in chat");
+    } catch (err) {
+      setSimulateStatus(`Error: ${err.message}`);
+    }
+    setSimulating(false);
   }
 
   async function handlePredigest() {
@@ -525,6 +567,42 @@ export default function SourcesNav() {
         {careerResult?.error && (
           <p className="mt-2 text-[10px] text-red-600">Error: {careerResult.error}</p>
         )}
+
+        {/* Stay Ahead — mobility intelligence */}
+        <div className="mt-3 pt-3 border-t border-purple-100">
+          <button
+            onClick={handleStayAhead}
+            disabled={stayAheadLoading}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+              stayAheadLoading
+                ? "bg-purple-100 text-purple-400 cursor-wait"
+                : "bg-white border border-purple-300 text-purple-700 hover:bg-purple-50"
+            }`}
+          >
+            {stayAheadLoading ? "Scanning…" : "🎯 Stay Ahead — find my next jobs + experiences"}
+          </button>
+          {stayAheadStatus && (
+            <p className="mt-1.5 text-[9px] text-purple-700 italic">{stayAheadStatus}</p>
+          )}
+        </div>
+
+        {/* Scenario simulation */}
+        <div className="mt-2">
+          <button
+            onClick={handleSimulateScenarios}
+            disabled={simulating}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+              simulating
+                ? "bg-purple-100 text-purple-400 cursor-wait"
+                : "bg-white border border-purple-300 text-purple-700 hover:bg-purple-50"
+            }`}
+          >
+            {simulating ? "Projecting…" : "🔮 Simulate career scenarios"}
+          </button>
+          {simulateStatus && (
+            <p className="mt-1.5 text-[9px] text-purple-700 italic">{simulateStatus}</p>
+          )}
+        </div>
       </div>
 
       {/* V3: Pre-digest — third Perplexity Computer use case */}

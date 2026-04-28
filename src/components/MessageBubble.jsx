@@ -68,6 +68,12 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "sme_match" && (
                 <SMEMatchCard card={card} onAction={onAction} />
               )}
+              {card.type === "stay_ahead" && (
+                <StayAheadCard card={card} onAction={onAction} />
+              )}
+              {card.type === "scenario_simulation" && (
+                <ScenarioSimulationCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -696,6 +702,264 @@ function SMEMatchCard({ card, onAction }) {
       <p className="text-[9px] text-gray-400 mt-3 italic">
         Internal SMEs ranked by mastery × recency × opt-in. External by mastery × kudos × availability.
       </p>
+    </div>
+  );
+}
+
+function StayAheadCard({ card, onAction }) {
+  const ai = card.ai_resilience || {};
+  const risk = card.market_risk || {};
+  const bestFit = card.best_fit_roles || [];
+  const stretch = card.stretch_roles || [];
+  const pivots = card.pivot_options || [];
+  const experiences = card.hands_on_experiences || [];
+
+  const aiVulnLevel = ai.vulnerability_level || "unknown";
+  const aiVulnTone =
+    aiVulnLevel.includes("high")
+      ? { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", pill: "bg-red-600 text-white" }
+      : aiVulnLevel.includes("medium")
+      ? { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", pill: "bg-amber-500 text-white" }
+      : { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", pill: "bg-green-600 text-white" };
+
+  return (
+    <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/40 to-white p-4 max-w-[560px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ STAY AHEAD · AI-RESILIENCE + MOBILITY</span>
+      </div>
+
+      {/* AI-Resilience — the deepest WHY for Stay Ahead */}
+      {ai.headline && (
+        <div className={`px-3 py-2.5 rounded-lg mb-3 ${aiVulnTone.bg} border ${aiVulnTone.border}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider ${aiVulnTone.pill}`}>
+              🤖 AI VULNERABILITY · {aiVulnLevel.toUpperCase()}
+            </span>
+            {ai.vulnerability_score != null && (
+              <span className={`text-[10px] font-mono ${aiVulnTone.text}`}>
+                {(ai.vulnerability_score * 100).toFixed(0)}/100
+              </span>
+            )}
+          </div>
+          <p className="text-[12px] text-text-primary leading-snug">{ai.headline}</p>
+
+          {ai.ai_replaced_today?.length > 0 && (
+            <div className="mt-2.5 px-2.5 py-1.5 rounded bg-white/70 border border-gray-100">
+              <p className="text-[9px] text-gray-500 font-bold tracking-wider mb-1">⚠ TASKS AI ALREADY DOES (don't define yourself by these)</p>
+              <ul className="text-[10px] text-text-primary space-y-0.5">
+                {ai.ai_replaced_today.map((t, i) => <li key={i}>· {t}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {ai.ai_amplified_skills?.length > 0 && (
+            <div className="mt-1.5 px-2.5 py-1.5 rounded bg-white/70 border border-gray-100">
+              <p className="text-[9px] text-green-700 font-bold tracking-wider mb-1">✓ SKILLS AI AMPLIFIES (you keep these and become more valuable)</p>
+              <ul className="text-[10px] text-text-primary space-y-0.5">
+                {ai.ai_amplified_skills.map((s, i) => <li key={i}>· {s}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {ai.up_the_stack_moves?.length > 0 && (
+            <div className="mt-1.5 px-2.5 py-1.5 rounded bg-white/70 border border-purple-200">
+              <p className="text-[9px] text-purple-700 font-bold tracking-wider mb-1">↑ MOVES UP THE AI STACK (be the architect, not the replaced)</p>
+              <div className="space-y-1.5">
+                {ai.up_the_stack_moves.map((m, i) => (
+                  <div key={i}>
+                    <p className="text-[11px] font-semibold text-text-primary">{m.title}</p>
+                    <p className="text-[10px] text-gray-600 leading-snug">{m.what}</p>
+                    {m.concrete_step && <p className="text-[10px] text-purple-700 italic mt-0.5">→ {m.concrete_step}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {ai.ai_resilient_pivots?.length > 0 && (
+            <div className="mt-1.5 px-2.5 py-1.5 rounded bg-white/70 border border-blue-200">
+              <p className="text-[9px] text-blue-700 font-bold tracking-wider mb-1">🌊 AI-RESILIENT PIVOTS (where AI is a tailwind, not a headwind)</p>
+              <div className="space-y-1">
+                {ai.ai_resilient_pivots.map((p, i) => (
+                  <div key={i}>
+                    <p className="text-[11px] font-semibold text-text-primary">{p.role}</p>
+                    <p className="text-[10px] text-gray-600 leading-snug">{p.rationale}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {ai.what_to_avoid?.length > 0 && (
+            <div className="mt-1.5 px-2.5 py-1.5 rounded bg-white/70 border border-gray-200">
+              <p className="text-[9px] text-gray-500 font-bold tracking-wider mb-1">✗ WHAT TO AVOID</p>
+              <ul className="text-[10px] text-text-primary space-y-0.5">
+                {ai.what_to_avoid.map((w, i) => <li key={i}>· {w}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {risk.signal && (
+        <div className={`px-3 py-2 rounded-lg mb-3 ${risk.tone === "amber" ? "bg-amber-50 border border-amber-200" : risk.tone === "red" ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
+          <p className={`text-[10px] font-bold tracking-wider mb-0.5 ${risk.tone === "amber" ? "text-amber-700" : risk.tone === "red" ? "text-red-700" : "text-green-700"}`}>
+            ⚠ MARKET RISK · {(risk.level || "unknown").toUpperCase()}
+          </p>
+          <p className="text-[11px] text-text-primary leading-snug">{risk.signal}</p>
+        </div>
+      )}
+
+      {bestFit.length > 0 && (
+        <Section title="🎯 BEST-FIT ROLES (apply today)" tone="green">
+          {bestFit.map((r, i) => <RoleRow key={i} r={r} />)}
+        </Section>
+      )}
+
+      {stretch.length > 0 && (
+        <Section title="📈 STRETCH ROLES (close + 1-2 gaps)" tone="amber">
+          {stretch.map((r, i) => <RoleRow key={i} r={r} extra={r.path_to_ready && <p className="text-[10px] text-amber-700 italic mt-1">⏱ {r.path_to_ready}</p>} />)}
+        </Section>
+      )}
+
+      {pivots.length > 0 && (
+        <Section title="🔄 PIVOT OPTIONS (transferable skills)" tone="blue">
+          {pivots.map((r, i) => <RoleRow key={i} r={r} extra={r.transferable_skills && <p className="text-[10px] text-blue-700 italic mt-1">↗ Transferable: {r.transferable_skills.join(" · ")}</p>} />)}
+        </Section>
+      )}
+
+      {experiences.length > 0 && (
+        <Section title="🛠 HANDS-ON EXPERIENCES (build the credentials)" tone="purple">
+          {experiences.map((e, i) => (
+            <div key={i} className="px-3 py-2 rounded-lg border border-purple-100 bg-white mb-1.5">
+              <div className="flex items-start gap-2">
+                <span className="px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider shrink-0 bg-purple-100 text-purple-800">{e.kind}</span>
+                <p className="text-[12px] font-semibold text-text-primary leading-tight flex-1">{e.title}</p>
+                <span className="text-[9px] font-mono text-purple-700 shrink-0">{(e.fit_score * 100).toFixed(0)}</span>
+              </div>
+              {e.adds_to_resume && <p className="text-[10px] text-text-primary mt-1.5"><span className="font-semibold">Adds:</span> {e.adds_to_resume}</p>}
+              {e.how_to_get_it && <p className="text-[10px] text-gray-600 italic mt-0.5"><span className="font-semibold not-italic text-gray-700">How:</span> {e.how_to_get_it}</p>}
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {card.summary && (
+        <div className="mt-3 px-3 py-2 rounded-lg bg-navy/5 border border-navy/20">
+          <p className="text-[10px] text-navy font-bold tracking-wider mb-0.5">SUMMARY</p>
+          <p className="text-[11px] text-text-primary leading-snug">{card.summary}</p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-purple-100">
+        <span className="text-[9px] text-gray-400">Powered by</span>
+        <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
+        <ModeBadge mode={card.modes?.classifier} label="Claude" />
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, tone, children }) {
+  const headColor = { green: "text-green-700", amber: "text-amber-700", blue: "text-blue-700", purple: "text-purple-700" }[tone] || "text-gray-600";
+  return (
+    <div className="mb-3">
+      <p className={`text-[9px] font-bold tracking-wider mb-1.5 ${headColor}`}>{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function RoleRow({ r, extra }) {
+  return (
+    <div className="px-3 py-2 rounded-lg border border-gray-200 bg-white mb-1.5">
+      <div className="flex items-start gap-2">
+        <p className="text-[12px] font-semibold text-text-primary leading-tight flex-1">{r.title} <span className="text-gray-400 font-normal">@ {r.company}</span></p>
+        <span className="text-[9px] font-mono text-purple-700 shrink-0">{(r.match_score * 100).toFixed(0)}</span>
+      </div>
+      {r.salary_range && <p className="text-[10px] text-gray-500 mt-0.5">{r.salary_range}{r.location ? ` · ${r.location}` : ""}</p>}
+      {r.match_reason && <p className="text-[10px] text-text-primary mt-1"><span className="font-semibold">Why match:</span> {r.match_reason}</p>}
+      {r.why_apply && <p className="text-[10px] text-gray-600 italic mt-0.5">{r.why_apply}</p>}
+      {r.why_pivot && <p className="text-[10px] text-gray-600 italic mt-0.5">{r.why_pivot}</p>}
+      {extra}
+    </div>
+  );
+}
+
+function ScenarioSimulationCard({ card, onAction }) {
+  const projections = card.projections || [];
+  return (
+    <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/40 to-white p-4 max-w-[640px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-purple-700 font-bold tracking-wider">🔮 CAREER SCENARIO SIMULATION</span>
+      </div>
+      <p className="text-[11px] text-text-primary mb-3 leading-snug">{card.comparison_summary}</p>
+
+      <div className="space-y-3">
+        {projections.map((p, i) => (
+          <div key={i} className="border border-purple-100 rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-purple-50/60">
+              <p className="text-[12px] font-bold text-text-primary leading-tight">{p.name}</p>
+              <p className="text-[10px] text-purple-700 mt-0.5">{p.headline}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">{p.effort_hours_per_week} hrs/wk · {p.horizon_months} months</p>
+            </div>
+            <div className="px-3 py-2 bg-white">
+              {p.outcomes?.map((o, j) => (
+                <div key={j} className="mb-2 last:mb-0">
+                  <p className="text-[9px] text-gray-400 font-bold tracking-wider mb-1">AT {o.milestone_at_months} MONTHS</p>
+                  {o.mid_outcome && (
+                    <div className="px-2 py-1.5 rounded bg-purple-50 border border-purple-200 mb-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-[11px] font-semibold text-text-primary truncate">[mid · {(o.mid_outcome.probability * 100).toFixed(0)}%] {o.mid_outcome.role}</p>
+                        <p className="text-[10px] font-mono text-purple-700 shrink-0">{o.mid_outcome.comp}</p>
+                      </div>
+                      <p className="text-[9px] text-gray-600 italic mt-0.5">{o.mid_outcome.note}</p>
+                    </div>
+                  )}
+                  {o.high_outcome && (
+                    <div className="px-2 py-1 mb-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-[10px] text-green-700">[high · {(o.high_outcome.probability * 100).toFixed(0)}%] {o.high_outcome.role}</p>
+                        <p className="text-[9px] font-mono text-gray-500 shrink-0">{o.high_outcome.comp}</p>
+                      </div>
+                    </div>
+                  )}
+                  {o.low_outcome && (
+                    <div className="px-2 py-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-[10px] text-amber-700">[low · {(o.low_outcome.probability * 100).toFixed(0)}%] {o.low_outcome.role}</p>
+                        <p className="text-[9px] font-mono text-gray-500 shrink-0">{o.low_outcome.comp}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {p.required_experiences?.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-purple-100">
+                  <p className="text-[9px] text-purple-700 font-bold tracking-wider mb-1">REQUIRED</p>
+                  <ul className="text-[10px] text-text-primary space-y-0.5">
+                    {p.required_experiences.map((e, k) => <li key={k}>· {e}</li>)}
+                  </ul>
+                </div>
+              )}
+              {p.risk_markers?.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-purple-100">
+                  <p className="text-[9px] text-amber-700 font-bold tracking-wider mb-1">RISKS</p>
+                  <ul className="text-[10px] text-gray-600 space-y-0.5">
+                    {p.risk_markers.map((r, k) => <li key={k}>⚠ {r}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-purple-100">
+        <span className="text-[9px] text-gray-400">Engine:</span>
+        <ModeBadge mode={card.modes?.engine} label="Claude reasoning" />
+        <span className="text-[9px] text-gray-400 italic ml-auto">Probabilities are projections — your effort changes them</span>
+      </div>
     </div>
   );
 }

@@ -220,6 +220,127 @@ export async function checkFreshness({ sourceUrl, baselineText, baselineHash, co
 }
 
 // ─────────────────────────────────────────────
+// Career Compass · Stay Ahead — V3 mobility intelligence
+// ─────────────────────────────────────────────
+
+export async function runStayAhead(userId, profile) {
+  try {
+    const res = await fetch(`${RENDER_URL}/career/stay_ahead`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user', profile }),
+    })
+    if (res.status === 404) return _stubStayAhead()
+    if (!res.ok) return _stubStayAhead(`backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubStayAhead(err.message)
+  }
+}
+
+export async function runScenarioSimulation(userId, scenarios, profile) {
+  try {
+    const res = await fetch(`${RENDER_URL}/career/simulate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user', scenarios, profile }),
+    })
+    if (res.status === 404) return _stubSimulation()
+    if (!res.ok) return _stubSimulation(`backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubSimulation(err.message)
+  }
+}
+
+function _stubStayAhead(errorMsg = null) {
+  return {
+    ai_resilience: {
+      vulnerability_level: 'low-medium',
+      vulnerability_score: 0.32,
+      headline: 'Your Senior SWE → Cloud Architect track is RELATIVELY AI-resilient. Architectural judgment, organizational alignment, and customer-facing decisions are the parts AI is NOT taking over. Cloud Architects are needed to DESIGN AI infrastructure — demand growing 22% YoY.',
+      ai_replaced_today: [
+        'Boilerplate code generation (use AI; don\'t define yourself by it)',
+        'Initial Terraform / CloudFormation drafting',
+        'Routine log analysis + first-pass incident triage',
+      ],
+      ai_amplified_skills: [
+        'System design judgment (AI proposes, you decide tradeoffs)',
+        'Customer-facing architecture decisions',
+        'Cross-team alignment + organizational politics',
+        'Incident command under pressure',
+      ],
+      up_the_stack_moves: [
+        { title: 'Build agentic systems yourself', what: 'Be the engineer who ships AI agents — not the one replaced by them', concrete_step: 'Build a personal AI agent this quarter' },
+        { title: 'Become the AI infra architect', what: 'Cloud Architects who specialize in AI workloads are in extreme demand', concrete_step: 'Add AI infrastructure patterns to your path' },
+        { title: 'Agent supervision / evaluation', what: 'Designing evals for AI agents is a net-new role category', concrete_step: "Take Anthropic's agentic systems course" },
+      ],
+      ai_resilient_pivots: [
+        { role: 'AI Infrastructure Architect', rationale: 'AI is a tailwind. Demand +35% YoY. Cloud expertise translates directly.' },
+        { role: 'Agentic Systems Engineer', rationale: 'Net-new role; supply thin. You design what AI does.' },
+        { role: 'Developer Advocate (AI tools)', rationale: 'AI tool companies need humans who can teach + show. AI-immune 5+ years.' },
+      ],
+      what_to_avoid: [
+        'Roles defined by routine code generation',
+        'Pure DevOps automation specialist',
+        'QA-only roles',
+      ],
+    },
+    market_risk: {
+      level: 'manageable', tone: 'amber',
+      signal: 'Trajectory toward Cloud Architect well-timed (+18% YoY). BUT AWS-only specialists shrinking 6% YoY — diversify within 18 months.',
+      data_points: ['Multi-cloud now required at 47% (was 22%)', 'FinOps required at 47% (was 12%)', '~38K tech layoffs last 90 days; cloud roles relatively insulated'],
+    },
+    best_fit_roles: [
+      { title: 'Senior Cloud Engineer', company: 'Stripe', salary_range: '$220K-$260K', match_score: 0.92, match_reason: 'AWS + K8s + Linux + Python match 9 of 10 requirements.', why_apply: 'Strong infra culture, growing platform team.' },
+      { title: 'Senior SRE', company: 'Datadog', salary_range: '$240K-$290K', match_score: 0.89, match_reason: 'Strong overlap with observability work.', why_apply: 'Datadog values K8s ops experience.' },
+    ],
+    stretch_roles: [
+      { title: 'Staff Cloud Architect', company: 'Anthropic', salary_range: '$280K-$340K', match_score: 0.78, match_reason: 'Tech match strong. Gaps: FinOps + multi-region production.', path_to_ready: '6 weeks if FinOps mini-path + 1 multi-region project.' },
+    ],
+    pivot_options: [
+      { title: 'Solutions Engineer', company: 'AWS', salary_range: '$200K-$280K (base + variable)', match_score: 0.74, transferable_skills: ['Cloud expertise', 'Customer-facing comfort'], why_pivot: 'Higher upside via variable comp. Path to consulting/VC later.' },
+      { title: 'Developer Advocate', company: 'HashiCorp', salary_range: '$180K-$240K', match_score: 0.68, transferable_skills: ['Cloud expertise', 'Content interest'], why_pivot: 'Public visibility builds personal brand. Path into VC/founding.' },
+    ],
+    hands_on_experiences: [
+      { title: 'Adjunct lecturer in Cloud Architecture', kind: 'teaching', adds_to_resume: 'Teaching credibility · networking · pivot to dev-advocacy', how_to_get_it: 'Email CS dept chair at nearby university. 2-4 hrs/week.', fit_score: 0.88 },
+      { title: 'Build a personal AI agent project (ship to GitHub)', kind: 'side_project', adds_to_resume: 'AI/ML adjacency · public artifact · matches MLOps exploration', how_to_get_it: 'Weekend project. Use Claude API + a real personal pain. 3-5 weekends.', fit_score: 0.92 },
+      { title: 'Open-source contribution to KubeVirt or Cilium', kind: 'open_source', adds_to_resume: 'Deep K8s credibility · visible to hiring managers', how_to_get_it: 'Pick "good first issue" tagged in repo. 4-6 weekends to first PR.', fit_score: 0.85 },
+      { title: 'Volunteer board advisor for a non-profit', kind: 'advisor', adds_to_resume: 'Leadership · governance · cross-functional · resume diversity', how_to_get_it: 'VolunteerMatch / BoardSource / local non-profits needing infra help.', fit_score: 0.76 },
+    ],
+    summary: 'Three roles you could land today, two stretch within reach, three viable pivots. Biggest leverage: a hands-on AI project + adjunct lecturing.',
+    modes: { computer: 'client_stub', classifier: 'client_stub' },
+    _client_stub_reason: errorMsg || 'Backend /career/stay_ahead not yet deployed',
+  }
+}
+
+function _stubSimulation(errorMsg = null) {
+  return {
+    scenario_count: 3,
+    projections: [
+      { id: 'stay-current', name: 'Stay the course — Cloud Architect at TechCorp', headline: 'Lowest-risk path. 70% chance of Cloud Architect by month 12.', effort_hours_per_week: 4, horizon_months: 18,
+        outcomes: [{ milestone_at_months: 12, mid_outcome: { role: 'Cloud Architect (Staff)', comp: '$240K-$260K', probability: 0.7, note: 'Goal achieved on plan' }, low_outcome: { role: 'Senior SWE', comp: '$200K', probability: 0.1, note: 'Promo delayed' }, high_outcome: { role: 'Staff + leading migration', comp: '$260K-$285K', probability: 0.2, note: 'Org-level project leadership' } }],
+        required_experiences: ['Continue Cloud Architect path (already 46%)', 'Lead one cross-team migration'],
+        risk_markers: ['AWS-only specialization narrows long-term mobility', 'Internal promotion timing depends on cycle'],
+      },
+      { id: 'pivot-aws-se', name: 'Pivot — Solutions Engineer at AWS', headline: 'High variable upside (+30-50%). ~50% chance of OTE in year 1.', effort_hours_per_week: 6, horizon_months: 18,
+        outcomes: [{ milestone_at_months: 12, mid_outcome: { role: 'AWS SE on-target', comp: '$280K-$320K total', probability: 0.55, note: 'Hit quota' }, low_outcome: { role: 'AWS SE ramping', comp: '$220K total', probability: 0.2, note: 'Quota miss in Y1' }, high_outcome: { role: "AWS SE — President's Club tier", comp: '$340K-$400K total', probability: 0.25, note: 'Top-quartile rep' } }],
+        required_experiences: ['Customer-facing pitch practice', 'AWS SA Pro cert (~6 weeks)', '1-2 large customer war stories'],
+        risk_markers: ['Variable comp = year-1 ramp risk (~40% miss)', 'Reduces technical depth — hard to return to deep IC', 'AWS hiring tightening if cloud spend softens'],
+      },
+      { id: 'stretch-anthropic', name: 'Stretch — Staff Cloud Architect at Anthropic', headline: 'Highest ceiling (+$60-100K + meaningful equity). 35% chance at 12 months.', effort_hours_per_week: 10, horizon_months: 12,
+        outcomes: [{ milestone_at_months: 12, mid_outcome: { role: 'Staff Cloud Architect at Anthropic', comp: '$320K-$360K + equity', probability: 0.35, note: 'Goal achieved' }, low_outcome: { role: 'Staff Cloud Architect at peer co (Snowflake/Stripe)', comp: '$280K-$310K', probability: 0.3, note: 'Anthropic miss; peer landed' }, high_outcome: { role: 'Staff+ at Anthropic + conference talks', comp: '$340K + equity', probability: 0.1, note: 'Public profile builds' } }],
+        required_experiences: ['Finish FinOps mini-path (6 weeks)', 'Multi-region project on GitHub + blog', 'OSS contribution in agentic systems', '1-2 conference talks'],
+        risk_markers: ['10 hrs/week is sustainable 6 months but burnout risk', 'Anthropic + AI cos hire selectively', 'Equity-heavy depends on growth-stage outcomes'],
+      },
+    ],
+    comparison_summary: 'Stay-the-course is lowest-risk with strong upside (70% Cloud Architect by 18mo). Pivot to AWS SE is high variable upside but trades technical depth. Stretch to Anthropic is highest ceiling — only 35% chance, but the 35% includes +$40-60K and stronger long-term resume.',
+    modes: { engine: 'client_stub' },
+    _client_stub_reason: errorMsg || 'Backend /career/simulate not yet deployed',
+  }
+}
+
+// ─────────────────────────────────────────────
 // SME Marketplace — V3
 // Internal directory + external curated marketplace + booking
 // ─────────────────────────────────────────────
@@ -697,6 +818,9 @@ const agent = {
   // SME Marketplace
   findSMEs,
   bookSME,
+  // Career Compass family
+  runStayAhead,
+  runScenarioSimulation,
 }
 
 export default agent

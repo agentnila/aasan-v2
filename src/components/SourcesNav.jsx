@@ -27,6 +27,8 @@ export default function SourcesNav() {
   const [predigesting, setPredigesting] = useState(false);
   const [predigestResult, setPredigestResult] = useState(null);
   const [predigestOpen, setPredigestOpen] = useState(false);
+  const [pathLoading, setPathLoading] = useState(false);
+  const [pathLastAction, setPathLastAction] = useState(null);
   // Agentic stack status — Bridge (sync) + Computer/Claude (async via /agent/status)
   const [bridgeLive, setBridgeLive] = useState(false);
   const [serverStatus, setServerStatus] = useState(null);
@@ -109,6 +111,49 @@ export default function SourcesNav() {
       setCareerResult({ error: err.message });
     }
     setCareerScanning(false);
+  }
+
+  async function handleShowGoals() {
+    setPathLoading(true);
+    setPathLastAction("Loading goals…");
+    try {
+      const result = await agent.listGoals(user?.id || "demo-user");
+      const summary = `You have ${result.goal_count} active goal${result.goal_count !== 1 ? "s" : ""}. Here's the dashboard.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: {
+          messageContent: summary,
+          card: { type: "goals_dashboard", ...result },
+        },
+      }));
+      setPathLastAction(`✓ Posted ${result.goal_count} goals to chat`);
+    } catch (err) {
+      setPathLastAction(`Error: ${err.message}`);
+    }
+    setPathLoading(false);
+  }
+
+  async function handleTriggerPathAdjust() {
+    setPathLoading(true);
+    setPathLastAction("Engine running…");
+    try {
+      const result = await agent.recomputePath(
+        user?.id || "demo-user",
+        "cloud-architect",
+        "session_complete",
+        { simulated: true },
+      );
+      const summary = `Just ran the Path Adjustment Engine on your Cloud Architect path (trigger: session_complete). ${result.diff?.summary || "No changes"}`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: {
+          messageContent: summary,
+          card: { type: "path_update", ...result },
+        },
+      }));
+      setPathLastAction("✓ Path updated · diff in chat");
+    } catch (err) {
+      setPathLastAction(`Error: ${err.message}`);
+    }
+    setPathLoading(false);
   }
 
   async function handlePredigest() {
@@ -528,6 +573,44 @@ export default function SourcesNav() {
         )}
         {predigestResult?.error && (
           <p className="mt-2 text-[10px] text-red-600">Error: {predigestResult.error}</p>
+        )}
+      </div>
+
+      {/* V3: Path Engine — Live Persistent Learning Paths */}
+      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-green-50/40 to-transparent">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+          <p className="text-[10px] text-green-700 font-bold tracking-wider">⚡ PATH ENGINE</p>
+        </div>
+        <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
+          Multi-goal management. Each goal has a live path that auto-adjusts on session, content, or staleness triggers.
+        </p>
+        <div className="space-y-1.5">
+          <button
+            onClick={handleShowGoals}
+            disabled={pathLoading}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+              pathLoading
+                ? "bg-green-100 text-green-400 cursor-wait"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
+          >
+            🎯 Show my goals
+          </button>
+          <button
+            onClick={handleTriggerPathAdjust}
+            disabled={pathLoading}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+              pathLoading
+                ? "bg-green-100 text-green-400 cursor-wait"
+                : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
+            }`}
+          >
+            ⚡ Simulate session_complete
+          </button>
+        </div>
+        {pathLastAction && (
+          <p className="mt-2 text-[10px] text-green-700 italic">{pathLastAction}</p>
         )}
       </div>
 

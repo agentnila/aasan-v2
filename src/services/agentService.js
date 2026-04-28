@@ -219,6 +219,117 @@ export async function checkFreshness({ sourceUrl, baselineText, baselineHash, co
   }
 }
 
+// ─────────────────────────────────────────────
+// Path Engine — V3 Live Persistent Learning Paths
+// ─────────────────────────────────────────────
+
+export async function listGoals(userId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/goal/list`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user' }),
+    })
+    if (res.status === 404) return _stubGoalList()
+    if (!res.ok) return _stubGoalList(`backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubGoalList(err.message)
+  }
+}
+
+export async function getPath(userId, goalId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/path/get`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user', goal_id: goalId }),
+    })
+    if (!res.ok) return { error: `backend ${res.status}` }
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function recomputePath(userId, goalId, trigger = 'session_complete', triggerPayload = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/path/recompute`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: userId || 'demo-user',
+        goal_id: goalId,
+        trigger,
+        trigger_payload: triggerPayload,
+      }),
+    })
+    if (res.status === 404) return _stubRecompute(goalId, trigger)
+    if (!res.ok) return _stubRecompute(goalId, trigger, `backend ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    return _stubRecompute(goalId, trigger, err.message)
+  }
+}
+
+export async function insertStepManual(userId, goalId, step) {
+  try {
+    const res = await fetch(`${RENDER_URL}/path/insert_step`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId || 'demo-user', goal_id: goalId, step }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+function _stubGoalList(errorMsg = null) {
+  return {
+    user_id: 'demo-user',
+    goal_count: 3,
+    goals: [
+      {
+        id: 'cloud-architect', name: 'Become a Cloud Architect', priority: 'primary',
+        objective: "Lead our team's cloud migration, get promoted to Staff Engineer",
+        timeline: 'Q4 2026', days_left: 192, readiness: 48, delta: '+10 this wk',
+        path_summary: { progress_pct: 46, current_step_title: 'Service Mesh with Istio', total_steps: 13, completed_steps: 5, last_recompute_reason: 'Inserted topology refresher — K8s 1.31 deprecation', recent_adjustments: [] },
+      },
+      {
+        id: 'compliance', name: 'Data Privacy Compliance 2026', priority: 'assigned',
+        objective: 'Annual mandatory compliance', timeline: 'June 30, 2026', days_left: 64, readiness: 35, delta: '+15 this wk',
+        path_summary: { progress_pct: 33, current_step_title: 'PII handling for engineers', total_steps: 3, completed_steps: 1, last_recompute_reason: 'Pre-marked known steps from prior year', recent_adjustments: [] },
+      },
+      {
+        id: 'mlops', name: 'Learn about MLOps', priority: 'exploration',
+        objective: 'Curious; might bridge to next role', timeline: 'No deadline', days_left: null, readiness: 12, delta: 'new',
+        path_summary: { progress_pct: 25, current_step_title: 'Model serving fundamentals', total_steps: 5, completed_steps: 1, last_recompute_reason: 'Inserted Feature Stores — matched curiosity', recent_adjustments: [] },
+      },
+    ],
+    _client_stub_reason: errorMsg || 'Backend /goal/list not yet deployed',
+  }
+}
+
+function _stubRecompute(goalId, trigger, errorMsg = null) {
+  return {
+    goal_id: goalId,
+    goal_name: 'Become a Cloud Architect',
+    trigger,
+    diff: {
+      summary: "Marked Service Mesh done. Detected mTLS gap during the session. Inserted 'mTLS Quickstart (10 min)' before AWS Core Services.",
+      added: [{ id: 'step-6a', order: 6.5, title: 'mTLS Quickstart', step_type: 'gap_closure', status: 'active', estimated_minutes: 10, inserted_by: 'engine', inserted_reason: 'auto: gap detected during Service Mesh session' }],
+      modified: [{ id: 'step-6', status: 'done', mastery_at_completion: 0.7 }],
+      removed: [],
+      reordered: [],
+    },
+    path_after: { progress_pct: 46, current_step_id: 'step-6a', current_step_title: 'mTLS Quickstart', total_steps: 14 },
+    recomputed_at: new Date().toISOString(),
+    mode: 'client_stub',
+    _client_stub_reason: errorMsg || 'Backend /path/recompute not yet deployed',
+  }
+}
+
 /**
  * Pre-digest a long URL — Perplexity Computer reads it deeply, Claude extracts
  * a structured 5-concept digest + TL;DR + suggested next step.
@@ -491,6 +602,11 @@ const agent = {
   runCurrencyScan,
   runCareerScan,
   predigestDoc,
+  // Path Engine
+  listGoals,
+  getPath,
+  recomputePath,
+  insertStepManual,
 }
 
 export default agent

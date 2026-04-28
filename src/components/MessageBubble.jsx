@@ -59,6 +59,12 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "predigest" && (
                 <PredigestCard card={card} onAction={onAction} />
               )}
+              {card.type === "goals_dashboard" && (
+                <GoalsDashboardCard card={card} onAction={onAction} />
+              )}
+              {card.type === "path_update" && (
+                <PathUpdateCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -526,3 +532,98 @@ function PredigestCard({ card, onAction }) {
   );
 }
 
+
+function GoalsDashboardCard({ card, onAction }) {
+  const goals = card.goals || [];
+  return (
+    <div className="rounded-2xl border border-navy/20 bg-white p-4 max-w-[520px]">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[10px] text-navy font-bold tracking-wider">🎯 MY GOALS — {card.goal_count || goals.length} ACTIVE</span>
+      </div>
+      <div className="space-y-2.5">
+        {goals.map((g) => {
+          const priority = g.priority || "primary";
+          const badgeColor = priority === "primary" ? "bg-navy text-gold" : priority === "assigned" ? "bg-blue-600 text-white" : "bg-purple-100 text-purple-700";
+          return (
+            <div key={g.id} className="px-3 py-2.5 rounded-xl border border-gray-100 hover:border-navy/30 transition-colors">
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider ${badgeColor}`}>{priority.toUpperCase()}</span>
+                    <p className="text-[13px] font-semibold text-text-primary truncate">{g.name}</p>
+                  </div>
+                  <p className="text-[10px] text-gray-400">{g.timeline}{g.days_left ? ` · ${g.days_left} days left` : ""}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[16px] font-bold text-navy leading-none">{g.readiness}</p>
+                  <p className="text-[8px] text-gray-400 uppercase tracking-wider">readiness</p>
+                </div>
+              </div>
+              <div className="h-1 bg-gray-100 rounded-full overflow-hidden mt-1.5">
+                <div className="h-full bg-navy" style={{ width: `${g.path_summary?.progress_pct || 0}%` }} />
+              </div>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-[10px] text-gray-500">→ Next: <span className="text-text-primary font-medium">{g.path_summary?.current_step_title || "—"}</span></p>
+                <p className="text-[10px] font-mono text-navy">{g.path_summary?.progress_pct || 0}% · {g.path_summary?.completed_steps}/{g.path_summary?.total_steps} steps</p>
+              </div>
+              {g.path_summary?.last_recompute_reason && (
+                <div className="mt-2 px-2 py-1.5 rounded bg-gold/5 border border-gold/20">
+                  <p className="text-[9px] text-gold font-bold tracking-wider mb-0.5">⚡ LAST PATH ADJUSTMENT</p>
+                  <p className="text-[10px] text-text-primary leading-snug">{g.path_summary.last_recompute_reason}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PathUpdateCard({ card, onAction }) {
+  const diff = card.diff || {};
+  const added = diff.added || [];
+  const modified = diff.modified || [];
+  return (
+    <div className="rounded-2xl border border-green-200 bg-gradient-to-br from-green-50/40 to-white p-4 max-w-[480px]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-green-700 font-bold tracking-wider">⚡ PATH ENGINE · AUTO-ADJUSTMENT</span>
+      </div>
+      <p className="text-[12px] font-semibold text-text-primary leading-snug mb-2">{card.goal_name}</p>
+      <div className="px-3 py-2 rounded-lg bg-white border border-green-200">
+        <p className="text-[12px] text-text-primary leading-relaxed">{diff.summary}</p>
+      </div>
+      {added.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[9px] text-green-700 font-bold tracking-wider mb-1.5">+ INSERTED</p>
+          <div className="space-y-1">
+            {added.map((s, i) => (
+              <div key={i} className="px-2 py-1.5 rounded bg-green-50 border border-green-200">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="px-1 py-0.5 rounded bg-green-600 text-white text-[8px] font-bold tracking-wider">{s.step_type || "step"}</span>
+                  <span className="text-[12px] font-semibold text-text-primary leading-tight flex-1">{s.title}</span>
+                  {s.estimated_minutes && <span className="text-[9px] text-gray-400 font-mono">{s.estimated_minutes}m</span>}
+                </div>
+                {s.inserted_reason && <p className="text-[10px] text-gray-600 italic mt-0.5">{s.inserted_reason}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {modified.length > 0 && (
+        <p className="text-[10px] text-gray-500 mt-2">↻ {modified.length} step{modified.length > 1 ? "s" : ""} modified.</p>
+      )}
+      {card.path_after && (
+        <div className="mt-3 pt-3 border-t border-green-100 flex items-baseline justify-between">
+          <p className="text-[10px] text-gray-500">Now on: <span className="text-text-primary font-medium">{card.path_after.current_step_title}</span></p>
+          <p className="text-[10px] font-mono text-green-700">{card.path_after.progress_pct}%</p>
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-green-100">
+        <span className="text-[9px] text-gray-400">Engine:</span>
+        <ModeBadge mode={card.mode === "live" ? "live" : "stub"} label="Claude reasoning" />
+        <span className="text-[9px] text-gray-400 italic ml-auto">Manual edits are sacred</span>
+      </div>
+    </div>
+  );
+}

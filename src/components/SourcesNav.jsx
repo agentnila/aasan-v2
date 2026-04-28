@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useClerk, useUser } from "@clerk/clerk-react";
 import { seedDemoContent } from "../data/seedContent";
 import agent from "../services/agentService";
@@ -27,6 +27,36 @@ export default function SourcesNav() {
   const [predigesting, setPredigesting] = useState(false);
   const [predigestResult, setPredigestResult] = useState(null);
   const [predigestOpen, setPredigestOpen] = useState(false);
+  // Agentic stack status — Bridge (sync) + Computer/Claude (async via /agent/status)
+  const [bridgeLive, setBridgeLive] = useState(false);
+  const [serverStatus, setServerStatus] = useState(null);
+  const [statusRefreshing, setStatusRefreshing] = useState(false);
+
+  async function refreshAgentStatus() {
+    setStatusRefreshing(true);
+    setBridgeLive(agent.isBridgeConnected());
+    try {
+      const status = await agent.getServerAgentStatus({ refresh: true });
+      setServerStatus(status);
+    } catch (err) {
+      setServerStatus({ error: err.message });
+    }
+    setStatusRefreshing(false);
+  }
+
+  // Initial poll + re-poll whenever the bridge announces itself
+  useEffect(() => {
+    refreshAgentStatus();
+    const onBridgeReady = () => setBridgeLive(true);
+    window.addEventListener("message", (e) => {
+      if (e?.data?.source === "aasan-bridge" && e?.data?.type === "ready") {
+        onBridgeReady();
+      }
+    });
+    return () => {
+      // listener cleanup intentionally simple — page reload clears it anyway
+    };
+  }, []);
   const connectedCount = sources.filter((s) => s.connected).length;
   const { openUserProfile, signOut } = useClerk();
   const { user } = useUser();
@@ -195,6 +225,27 @@ export default function SourcesNav() {
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
+      </div>
+
+      {/* Agentic stack status — V3 two-vendor split */}
+      <div className="px-4 py-3 border-b border-gray-50 bg-gradient-to-br from-purple-50/30 to-transparent">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[9px] text-purple-700 font-bold tracking-wider">⚙ AGENTIC STACK</p>
+          <button
+            onClick={refreshAgentStatus}
+            disabled={statusRefreshing}
+            title="Re-check status"
+            className="text-[9px] text-gray-400 hover:text-purple-600 disabled:opacity-30"
+          >
+            {statusRefreshing ? "⟳ ..." : "⟳"}
+          </button>
+        </div>
+        <StackPill label="Bridge · Chrome" mode={bridgeLive ? "live" : "not_connected"} hint={bridgeLive ? "Reads any web page in your browser" : "Extension not detected — install required"} />
+        <StackPill label="Perplexity Computer" mode={serverStatus?.perplexity_computer?.mode} hint="Server-side: research, scrapes, predigest, enrollment" />
+        <StackPill label="Claude (server-side)" mode={serverStatus?.claude?.mode} hint="Substance classifier · concept extractor" />
+        {serverStatus?.error && (
+          <p className="text-[9px] text-red-500 mt-1">Status check failed: {serverStatus.error}</p>
+        )}
       </div>
 
       {/* Connected sources */}
@@ -524,5 +575,54 @@ export default function SourcesNav() {
         </button>
       </div>
     </nav>
+  );
+}
+
+function StackPill({ label, mode, hint }) {
+  const live = mode === "live";
+  const stub = mode === "stub" || mode === "client_stub";
+  const notConnected = mode === "not_connected" || mode === "unreachable";
+  const unknown = !live && !stub && !notConnected;
+
+  const dot = live
+    ? "bg-green-500"
+    : stub
+    ? "bg-amber-500"
+    : notConnected
+    ? "bg-gray-400"
+    : "bg-gray-300";
+  const textColor = live
+    ? "text-green-700"
+    : stub
+    ? "text-amber-700"
+    : notConnected
+    ? "text-gray-500"
+    : "text-gray-400";
+  const stateLabel = live
+    ? "live"
+    : stub
+    ? "stub"
+    : notConnected
+    ? "off"
+    : unknown
+    ? "..."
+    : mode;
+
+  return (
+    <div className="flex items-center gap-2 px-1.5 py-1 rounded">
+      <span className={`relative flex h-1.5 w-1.5 shrink-0`}>
+        {live && (
+          <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-50 animate-ping"></span>
+        )}
+        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${dot}`}></span>
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-semibold text-text-primary truncate">{label}</span>
+          <span className={`text-[8px] font-mono uppercase tracking-wider ${textColor}`}>{stateLabel}</span>
+        </div>
+        {hint && <p className="text-[9px] text-gray-400 truncate">{hint}</p>}
+      </div>
+    </div>
   );
 }

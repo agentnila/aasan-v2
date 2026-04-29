@@ -575,6 +575,20 @@ export async function findSMESlots(smeId, learnerId, { durationMin = 30, count =
   }
 }
 
+export async function listMyBookings(userId, { includePast = false } = {}) {
+  if (!userId) return { error: 'user_id required', as_learner: [], as_sme: [], total: 0 }
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/my_bookings`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId, include_past: includePast }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, as_learner: [], as_sme: [], total: 0 }
+  }
+}
+
 export async function bookSMESlot({ smeId, learnerId, topic, startAt, endAt }) {
   if (!smeId || !startAt || !endAt) return { error: 'sme_id, startAt, endAt required' }
   try {
@@ -1040,6 +1054,7 @@ const agent = {
   findSMEs,
   findSMESlots,
   bookSMESlot,
+  listMyBookings,
   registerSME,
   getSMEProfile,
   listSMEs,

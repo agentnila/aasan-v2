@@ -160,6 +160,25 @@ export default function SourcesNav() {
     setResumeLoading(false);
   }
 
+  async function handleShowMyBookings() {
+    setSmeLoading(true);
+    setSmeLastAction("Loading your bookings…");
+    try {
+      const result = await agent.listMyBookings(user?.id || "demo-user");
+      const total = result?.total ?? 0;
+      const summary = total === 0
+        ? "No upcoming SME sessions. Browse the marketplace to find someone, or register as an SME to start receiving bookings."
+        : `${total} upcoming session${total !== 1 ? "s" : ""} — ${result.counts?.as_learner || 0} you booked, ${result.counts?.as_sme || 0} where you're the SME.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: { messageContent: summary, card: { type: "sme_bookings", ...result } },
+      }));
+      setSmeLastAction(`✓ ${total} bookings posted to chat`);
+    } catch (err) {
+      setSmeLastAction(`Error: ${err.message}`);
+    }
+    setSmeLoading(false);
+  }
+
   async function handleBrowseSMEs() {
     setSmeLoading(true);
     setSmeLastAction("Loading marketplace…");
@@ -1009,6 +1028,16 @@ export default function SourcesNav() {
                 }`}
               >
                 👥 Browse the marketplace
+              </button>
+              <button
+                onClick={handleShowMyBookings}
+                disabled={smeLoading}
+                className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+                  smeLoading ? "bg-rose-100 text-rose-400 cursor-wait"
+                    : "bg-white border border-rose-300 text-rose-700 hover:bg-rose-50"
+                }`}
+              >
+                📅 My bookings
               </button>
               <button
                 onClick={handleStartSMERegister}

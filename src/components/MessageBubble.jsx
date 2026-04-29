@@ -94,6 +94,9 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "sme_slots" && (
                 <SMESlotsCard card={card} onAction={onAction} />
               )}
+              {card.type === "sme_bookings" && (
+                <SMEBookingsCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -1175,6 +1178,184 @@ function TailoredResumeCard({ card, onAction }) {
         <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
         <ModeBadge mode={card.modes?.classifier} label="Claude" />
         <span className="text-[9px] text-gray-400 italic ml-auto">Drawn from your living service record</span>
+      </div>
+    </div>
+  );
+}
+
+function SMEBookingsCard({ card }) {
+  const [activeSide, setActiveSide] = useState("all"); // "all" | "as_learner" | "as_sme"
+  const [expandedId, setExpandedId] = useState(null);
+
+  const asLearner = card.as_learner || [];
+  const asSme = card.as_sme || [];
+  const all = useMemo(
+    () => [...asLearner, ...asSme].sort((a, b) => (a.scheduled_at || "").localeCompare(b.scheduled_at || "")),
+    [asLearner, asSme],
+  );
+
+  const visible =
+    activeSide === "as_learner" ? asLearner
+    : activeSide === "as_sme" ? asSme
+    : all;
+
+  function fmtRange(startIso, endIso) {
+    try {
+      const s = new Date(startIso);
+      const e = new Date(endIso || startIso);
+      const today = new Date();
+      const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+      const dayLabel =
+        s.toDateString() === today.toDateString() ? "Today"
+        : s.toDateString() === tomorrow.toDateString() ? "Tomorrow"
+        : s.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+      const fmt = (d) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      return `${dayLabel} · ${fmt(s)}–${fmt(e)}`;
+    } catch { return startIso; }
+  }
+
+  function statusPill(status) {
+    const colors = {
+      confirmed:   "bg-emerald-50 text-emerald-700",
+      requested:   "bg-amber-50 text-amber-700",
+      completed:   "bg-gray-100 text-gray-600",
+      cancelled:   "bg-red-50 text-red-700",
+      no_show:     "bg-red-50 text-red-700",
+      rescheduled: "bg-blue-50 text-blue-700",
+    };
+    return colors[status] || "bg-gray-100 text-gray-600";
+  }
+
+  return (
+    <div className="bg-white border border-rose-100 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-4 py-3 bg-gradient-to-r from-rose-50 to-transparent border-b border-rose-100">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          <span className="text-[10px] font-bold text-rose-700 tracking-wider">📅 MY BOOKINGS</span>
+          <span className="ml-auto text-[10px] font-mono text-rose-700">{card.total ?? 0} upcoming</span>
+        </div>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          {asLearner.length} booked with SMEs · {asSme.length} where you're the SME
+        </p>
+      </div>
+
+      <div className="px-4 py-2.5 border-b border-gray-100 flex flex-wrap gap-1">
+        <button
+          onClick={() => setActiveSide("all")}
+          className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+            activeSide === "all" ? "bg-rose-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          All <span className="opacity-70">{all.length}</span>
+        </button>
+        <button
+          onClick={() => setActiveSide("as_learner")}
+          className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+            activeSide === "as_learner" ? "bg-rose-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          📖 I booked <span className="opacity-70">{asLearner.length}</span>
+        </button>
+        <button
+          onClick={() => setActiveSide("as_sme")}
+          className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+            activeSide === "as_sme" ? "bg-rose-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          🤝 I'm the SME <span className="opacity-70">{asSme.length}</span>
+        </button>
+      </div>
+
+      <div className="max-h-[28rem] overflow-y-auto">
+        {visible.length === 0 && (
+          <p className="text-[11px] text-gray-400 px-4 py-8 text-center">
+            {activeSide === "as_sme"
+              ? "No one's booked you yet. Make sure your SME profile has clear subjects + a schedule window."
+              : activeSide === "as_learner"
+              ? "Nothing booked yet. 👥 Browse the marketplace to find an SME."
+              : "Nothing scheduled. Browse the marketplace or register as an SME."}
+          </p>
+        )}
+        {visible.map((b, i) => {
+          const isOpen = expandedId === b.booking_id;
+          const isLearner = b.side === "learner";
+          const counterpartLabel = isLearner ? `with ${b.sme_name}` : `Booked by ${b.learner_id}`;
+          return (
+            <div key={`${b.side}-${b.booking_id}-${i}`} className={`px-4 py-3 ${i === 0 ? "" : "border-t border-gray-50"}`}>
+              <button
+                onClick={() => setExpandedId(isOpen ? null : b.booking_id)}
+                className="w-full text-left flex items-start gap-2.5 group"
+              >
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                  isLearner ? "bg-rose-100 text-rose-700" : "bg-violet-100 text-violet-700"
+                }`}>
+                  {isLearner ? "📖" : "🤝"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[12px] font-semibold text-text-primary truncate">{b.topic || "Session"}</span>
+                    <span className={`text-[9px] rounded-full px-1.5 py-0.5 font-medium shrink-0 ${statusPill(b.status)}`}>
+                      {b.status}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 truncate">{counterpartLabel}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{fmtRange(b.scheduled_at, b.end_at)} · {b.duration_minutes || 30} min</p>
+                </div>
+                <span className={`text-[9px] text-gray-400 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
+              </button>
+
+              {isOpen && (
+                <div className="ml-9 pl-2 border-l-2 border-rose-100 mt-3 space-y-2.5">
+                  {b.expectations_from_students && isLearner && (
+                    <div className="bg-rose-50/40 border border-rose-100 rounded-md px-2.5 py-2">
+                      <p className="text-[9px] font-semibold text-rose-700 tracking-wider mb-0.5">⚡ READ BEFORE THIS SESSION</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">{b.expectations_from_students}</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">CALENDAR</p>
+                      {b.calendar_event_url ? (
+                        <a href={b.calendar_event_url} target="_blank" rel="noreferrer"
+                           className="text-[11px] text-rose-700 hover:underline">
+                          Open event ↗
+                        </a>
+                      ) : (
+                        <p className="text-gray-400">—</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">MEETING</p>
+                      {b.meeting_url ? (
+                        <a href={b.meeting_url} target="_blank" rel="noreferrer"
+                           className="text-[11px] text-rose-700 hover:underline">
+                          Join Meet ↗
+                        </a>
+                      ) : (
+                        <p className="text-gray-400">—</p>
+                      )}
+                    </div>
+                  </div>
+                  {b.rate_amount > 0 && (
+                    <p className="text-[10px] text-gray-500">
+                      {(b.rate_currency || "usd").toUpperCase()} {b.rate_amount} · {b.payment_status || "not_required"}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-gray-400 italic">
+                    Booking ID #{b.booking_id} · created {b.created_at?.slice(0, 10)}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+        <span className="text-[9px] text-gray-400">
+          {visible.length} of {all.length}{activeSide !== "all" ? " (filtered)" : ""}
+        </span>
+        <span className="text-[9px] text-gray-400 italic">Reschedule / cancel coming next.</span>
       </div>
     </div>
   );

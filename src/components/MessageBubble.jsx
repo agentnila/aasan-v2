@@ -577,42 +577,150 @@ function PredigestCard({ card, onAction }) {
 
 
 function GoalsDashboardCard({ card, onAction }) {
+  const [expandedId, setExpandedId] = useState(null);
   const goals = card.goals || [];
+
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+    catch { return iso; }
+  }
+
   return (
     <div className="rounded-2xl border border-navy/20 bg-white p-4 max-w-[520px]">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[10px] text-navy font-bold tracking-wider">🎯 MY GOALS — {card.goal_count || goals.length} ACTIVE</span>
+        <span className="ml-auto text-[9px] text-gray-400 italic">Click any goal for full details</span>
       </div>
       <div className="space-y-2.5">
         {goals.map((g) => {
           const priority = g.priority || "primary";
           const badgeColor = priority === "primary" ? "bg-navy text-gold" : priority === "assigned" ? "bg-blue-600 text-white" : "bg-purple-100 text-purple-700";
+          const isOpen = expandedId === g.id;
+          const adjustments = g.path_summary?.recent_adjustments || [];
           return (
-            <div key={g.id} className="px-3 py-2.5 rounded-xl border border-gray-100 hover:border-navy/30 transition-colors">
-              <div className="flex items-start justify-between gap-3 mb-1">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider ${badgeColor}`}>{priority.toUpperCase()}</span>
-                    <p className="text-[13px] font-semibold text-text-primary truncate">{g.name}</p>
+            <div
+              key={g.id}
+              className={`rounded-xl border transition-colors ${isOpen ? "border-navy/40 bg-navy/[0.02]" : "border-gray-100 hover:border-navy/30"}`}
+            >
+              <button
+                type="button"
+                onClick={() => setExpandedId(isOpen ? null : g.id)}
+                className="w-full text-left px-3 py-2.5 cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider ${badgeColor}`}>{priority.toUpperCase()}</span>
+                      <p className="text-[13px] font-semibold text-text-primary truncate">{g.name}</p>
+                      <span className={`ml-auto text-[10px] text-gray-400 transition-transform shrink-0 ${isOpen ? "rotate-90" : ""}`}>▶</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400">{g.timeline}{g.days_left ? ` · ${g.days_left} days left` : ""}</p>
                   </div>
-                  <p className="text-[10px] text-gray-400">{g.timeline}{g.days_left ? ` · ${g.days_left} days left` : ""}</p>
+                  <div className="text-right shrink-0">
+                    <p className="text-[16px] font-bold text-navy leading-none">{g.readiness}</p>
+                    <p className="text-[8px] text-gray-400 uppercase tracking-wider">readiness</p>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[16px] font-bold text-navy leading-none">{g.readiness}</p>
-                  <p className="text-[8px] text-gray-400 uppercase tracking-wider">readiness</p>
+                <div className="h-1 bg-gray-100 rounded-full overflow-hidden mt-1.5">
+                  <div className="h-full bg-navy" style={{ width: `${g.path_summary?.progress_pct || 0}%` }} />
                 </div>
-              </div>
-              <div className="h-1 bg-gray-100 rounded-full overflow-hidden mt-1.5">
-                <div className="h-full bg-navy" style={{ width: `${g.path_summary?.progress_pct || 0}%` }} />
-              </div>
-              <div className="flex items-center justify-between mt-1.5">
-                <p className="text-[10px] text-gray-500">→ Next: <span className="text-text-primary font-medium">{g.path_summary?.current_step_title || "—"}</span></p>
-                <p className="text-[10px] font-mono text-navy">{g.path_summary?.progress_pct || 0}% · {g.path_summary?.completed_steps}/{g.path_summary?.total_steps} steps</p>
-              </div>
-              {g.path_summary?.last_recompute_reason && (
-                <div className="mt-2 px-2 py-1.5 rounded bg-gold/5 border border-gold/20">
-                  <p className="text-[9px] text-gold font-bold tracking-wider mb-0.5">⚡ LAST PATH ADJUSTMENT</p>
-                  <p className="text-[10px] text-text-primary leading-snug">{g.path_summary.last_recompute_reason}</p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <p className="text-[10px] text-gray-500">→ Next: <span className="text-text-primary font-medium">{g.path_summary?.current_step_title || "—"}</span></p>
+                  <p className="text-[10px] font-mono text-navy">{g.path_summary?.progress_pct || 0}% · {g.path_summary?.completed_steps}/{g.path_summary?.total_steps} steps</p>
+                </div>
+                {!isOpen && g.path_summary?.last_recompute_reason && (
+                  <div className="mt-2 px-2 py-1.5 rounded bg-gold/5 border border-gold/20">
+                    <p className="text-[9px] text-gold font-bold tracking-wider mb-0.5">⚡ LAST PATH ADJUSTMENT</p>
+                    <p className="text-[10px] text-text-primary leading-snug">{g.path_summary.last_recompute_reason}</p>
+                  </div>
+                )}
+              </button>
+
+              {isOpen && (
+                <div className="px-3 pb-3 pt-1 border-t border-navy/10 space-y-3">
+                  {g.objective && (
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">📌 WHY THIS GOAL</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">{g.objective}</p>
+                    </div>
+                  )}
+                  {g.success_criteria && (
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">✅ SUCCESS CRITERIA</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">{g.success_criteria}</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3 text-[11px]">
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">DEADLINE</p>
+                      <p className="text-gray-700">{g.timeline || "—"}</p>
+                      {g.days_left != null && <p className="text-[9px] text-gray-400 mt-0.5">{g.days_left} days remaining</p>}
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">STATUS</p>
+                      <p className="text-gray-700 capitalize">{g.status || "active"}</p>
+                      {g.delta && <p className="text-[9px] text-gray-400 mt-0.5">{g.delta}</p>}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1">PATH</p>
+                    <div className="px-2.5 py-2 rounded-md bg-white border border-gray-100">
+                      <p className="text-[11px] text-text-primary">
+                        Currently on: <span className="font-medium">{g.path_summary?.current_step_title || "—"}</span>
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {g.path_summary?.completed_steps || 0} of {g.path_summary?.total_steps || 0} steps complete · {g.path_summary?.progress_pct || 0}%
+                      </p>
+                      {g.path_summary?.last_recomputed_at && (
+                        <p className="text-[9px] text-gray-400 mt-0.5">Last recomputed {fmtDate(g.path_summary.last_recomputed_at)}</p>
+                      )}
+                    </div>
+                  </div>
+                  {g.path_summary?.last_recompute_reason && (
+                    <div className="px-2.5 py-2 rounded bg-gold/5 border border-gold/20">
+                      <p className="text-[9px] text-gold font-bold tracking-wider mb-0.5">⚡ LAST PATH ADJUSTMENT</p>
+                      <p className="text-[11px] text-text-primary leading-snug">{g.path_summary.last_recompute_reason}</p>
+                    </div>
+                  )}
+                  {adjustments.length > 0 && (
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1">RECENT ADJUSTMENTS · {adjustments.length}</p>
+                      <div className="space-y-1">
+                        {adjustments.map((adj, i) => (
+                          <div key={i} className="px-2 py-1.5 rounded border border-gray-100 bg-white">
+                            <div className="flex items-baseline gap-2 mb-0.5">
+                              <span className="text-[9px] text-gray-400 font-mono shrink-0">{adj.date}</span>
+                              {adj.trigger && (
+                                <span className="text-[8px] uppercase tracking-wider text-gray-500 bg-gray-100 rounded px-1 py-0.5 shrink-0">
+                                  {adj.trigger}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-text-primary leading-snug flex-1">{adj.reason}</span>
+                            </div>
+                            {adj.added && adj.added.length > 0 && (
+                              <p className="text-[9px] text-gray-500 mt-0.5">+ {adj.added.join(", ")}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onAction?.(`Show me the full path for ${g.name}`); }}
+                      className="text-[11px] font-semibold bg-navy text-white hover:bg-navy/90 rounded-md px-2.5 py-1.5 transition-colors"
+                    >
+                      Show full path →
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onAction?.(`What should I learn next for my goal "${g.name}"?`); }}
+                      className="text-[11px] font-semibold border border-navy/30 text-navy hover:bg-navy/5 rounded-md px-2.5 py-1.5 transition-colors"
+                    >
+                      Recommend next step
+                    </button>
+                    <span className="ml-auto text-[9px] text-gray-400 italic">Edit / archive coming next</span>
+                  </div>
                 </div>
               )}
             </div>

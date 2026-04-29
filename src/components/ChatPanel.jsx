@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 import MessageBubble from "./MessageBubble";
 import { captureSession, completeReview, addMemory, searchContent, addContent, isAgentConnected, agentReadPage, agentOpenAndRead, findSlots, bookSlot } from "../services/api";
+import agent from "../services/agentService";
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 const CLAUDE_MODEL = "claude-sonnet-4-5";
@@ -487,7 +488,84 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
       handleBookSlot(arg);
       return;
     }
+    if (arg?.type === "book_sme") {
+      handleBookSME(arg);
+      return;
+    }
+    if (arg?.type === "book_sme_slot") {
+      handleBookSMESlot(arg);
+      return;
+    }
     sendMessage(String(arg));
+  }
+
+  async function handleBookSME({ smeId, smeName, topic }) {
+    if (!smeId) return;
+    setIsTyping(true);
+    try {
+      const userId = user?.id || "demo-user";
+      const result = await agent.findSMESlots(smeId, userId, { durationMin: 30, count: 3 });
+      const slots = result?.slots || [];
+      const intro = slots.length === 0
+        ? `${result?.sme_name || smeName} has no open slots in ${result?.schedule_window_text || "their stated window"} that fit your calendar in the next 14 days. Try messaging them directly or pick a different SME.`
+        : `${result?.sme_name || smeName} is open at these times in your calendar (${result?.duration_min || 30} min):`;
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: intro,
+        cards: slots.length === 0 ? [] : [{
+          type: "sme_slots",
+          sme_id: smeId,
+          sme_name: result?.sme_name || smeName,
+          sme_role: result?.sme_role || "",
+          schedule_window_text: result?.schedule_window_text || "",
+          expectations_from_students: result?.expectations_from_students || "",
+          rate_label: result?.rate_label || "",
+          calendar_connected: result?.calendar_connected,
+          topic: topic || (result?.topics && result.topics[0]) || "session",
+          slots,
+        }],
+        timestamp: new Date(),
+      }]);
+    } catch (err) {
+      console.log("findSMESlots failed:", err.message);
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: "Couldn't reach the SME marketplace. Try again in a moment.",
+        timestamp: new Date(),
+      }]);
+    }
+    setIsTyping(false);
+  }
+
+  async function handleBookSMESlot({ smeId, smeName, topic, slot }) {
+    if (!smeId || !slot?.start || !slot?.end) return;
+    setIsTyping(true);
+    try {
+      const userId = user?.id || "demo-user";
+      const result = await agent.bookSMESlot({
+        smeId, learnerId: userId, topic, startAt: slot.start, endAt: slot.end,
+      });
+      const booked = !!result?.booking_id;
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: booked
+          ? `Booked. ${slot.day} at ${slot.time} — "${topic}" with ${smeName || result?.sme_name}. Calendar invites sent to both of you.`
+          : (result?.error ? `Couldn't book: ${result.error}` : "Couldn't book that slot. Want me to try another?"),
+        timestamp: new Date(),
+      }]);
+    } catch (err) {
+      console.log("bookSMESlot failed:", err.message);
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: "Couldn't reach the booking service. Try again in a moment.",
+        timestamp: new Date(),
+      }]);
+    }
+    setIsTyping(false);
   }
 
   async function handleFindSlots({ stepTitle } = {}) {

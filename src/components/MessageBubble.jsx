@@ -91,6 +91,9 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "sme_browse" && (
                 <SMEBrowseCard card={card} onAction={onAction} />
               )}
+              {card.type === "sme_slots" && (
+                <SMESlotsCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -1177,6 +1180,74 @@ function TailoredResumeCard({ card, onAction }) {
   );
 }
 
+function SMESlotsCard({ card, onAction }) {
+  const slots = card.slots || [];
+  return (
+    <div className="bg-white border border-rose-100 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-4 py-3 bg-gradient-to-r from-rose-50 to-transparent border-b border-rose-100">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          <span className="text-[10px] font-bold text-rose-700 tracking-wider">🤝 BOOK {(card.sme_name || "SME").toUpperCase()}</span>
+          <span className="ml-auto text-[10px] text-rose-700">{card.rate_label || ""}</span>
+        </div>
+        <p className="text-[11px] text-gray-600 leading-relaxed">
+          {card.topic ? <><span className="font-medium">Topic:</span> {card.topic} · </> : null}
+          <span className="text-gray-400">{card.sme_role || ""}</span>
+        </p>
+        {card.schedule_window_text && (
+          <p className="text-[10px] text-gray-500 mt-1">Their window: <span className="text-gray-700">{card.schedule_window_text}</span></p>
+        )}
+      </div>
+
+      {card.expectations_from_students && (
+        <div className="mx-4 mt-3 bg-rose-50/40 border border-rose-100 rounded-md px-2.5 py-2">
+          <p className="text-[9px] font-semibold text-rose-700 tracking-wider mb-0.5">⚡ READ THIS BEFORE YOUR SESSION</p>
+          <p className="text-[11px] text-gray-700 leading-relaxed">{card.expectations_from_students}</p>
+        </div>
+      )}
+
+      <div className="px-4 py-3">
+        <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-2">PICK A SLOT — {slots.length} OPEN</p>
+        <div className="flex flex-col gap-2">
+          {slots.map((slot, i) => (
+            <button
+              key={i}
+              onClick={() => onAction({
+                type: "book_sme_slot",
+                smeId: card.sme_id,
+                smeName: card.sme_name,
+                topic: card.topic,
+                slot,
+              })}
+              className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-rose-300 hover:bg-rose-50/30 transition-all text-left w-full group"
+            >
+              <div className="w-12 text-center shrink-0">
+                <p className="text-[10px] text-gray-400 font-medium">{slot.day}</p>
+                <p className="text-[12px] font-bold text-text-primary">{slot.time.split(" – ")[0]}</p>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium text-text-primary">{slot.time}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{slot.fit}</p>
+              </div>
+              <span className="text-[11px] text-rose-700 opacity-0 group-hover:opacity-100 font-medium transition-opacity shrink-0">
+                Book →
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+        <span className="text-[9px] text-gray-400">
+          {card.calendar_connected
+            ? "Slots from your live Google Calendar"
+            : "Slots from sample calendar (Workspace not yet connected)"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function SMEBrowseCard({ card, onAction }) {
   const [query, setQuery] = useState("");
   const [activeSubject, setActiveSubject] = useState(null);
@@ -1215,7 +1286,12 @@ function SMEBrowseCard({ card, onAction }) {
   }
 
   function bookHref(s) {
-    return () => onAction?.(`Book ${s.name} for ${s.topics?.[0] || "a session"}`);
+    return () => onAction?.({
+      type: "book_sme",
+      smeId: s.sme_id,
+      smeName: s.name,
+      topic: (s.topics && s.topics[0]) || "session",
+    });
   }
 
   return (

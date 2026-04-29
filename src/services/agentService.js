@@ -555,6 +555,46 @@ export async function bookSME(smeId, learnerId, topic, slot) {
   }
 }
 
+export async function findSMESlots(smeId, learnerId, { durationMin = 30, count = 3, windowDays = 14 } = {}) {
+  if (!smeId) return { error: 'sme_id required', slots: [] }
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/find_slots`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        sme_id: smeId,
+        learner_id: learnerId || 'demo-user',
+        duration_min: durationMin,
+        count,
+        window_days: windowDays,
+      }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, slots: [] }
+  }
+}
+
+export async function bookSMESlot({ smeId, learnerId, topic, startAt, endAt }) {
+  if (!smeId || !startAt || !endAt) return { error: 'sme_id, startAt, endAt required' }
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/book`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        sme_id: smeId,
+        learner_id: learnerId || 'demo-user',
+        topic,
+        start_at: startAt,
+        end_at: endAt,
+      }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
 function _stubFindSMEs(topic, errorMsg = null) {
   const matches = [
     {
@@ -998,6 +1038,8 @@ const agent = {
   insertStepManual,
   // SME Marketplace
   findSMEs,
+  findSMESlots,
+  bookSMESlot,
   registerSME,
   getSMEProfile,
   listSMEs,

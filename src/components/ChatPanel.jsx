@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 import MessageBubble from "./MessageBubble";
-import { captureSession, completeReview, addMemory, searchContent, addContent, isAgentConnected, agentReadPage, agentOpenAndRead } from "../services/api";
+import { captureSession, completeReview, addMemory, searchContent, addContent, isAgentConnected, agentReadPage, agentOpenAndRead, findSlots, bookSlot } from "../services/api";
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 const CLAUDE_MODEL = "claude-sonnet-4-5";
@@ -65,6 +65,34 @@ function getSavedGoal() {
   try {
     return JSON.parse(localStorage.getItem('aasan_goal') || 'null');
   } catch { return null; }
+}
+
+// Phase C — multi-goal scheduling. Reads goals from localStorage and shapes
+// them for the backend's goal_budget formula. Single-goal users get a
+// 1-element list (which the backend handles fine — just no weighting needed).
+function readActiveGoals() {
+  const goals = [];
+  const primary = getSavedGoal();
+  if (primary) {
+    goals.push({
+      goal_id: primary.id || 'primary',
+      name: primary.goal,
+      priority: 'primary',
+      deadline: primary.timeline,
+      progress_pct: primary.progress_pct || 0,
+    });
+  }
+  try {
+    const extras = JSON.parse(localStorage.getItem('aasan_secondary_goals') || '[]');
+    extras.forEach(g => goals.push({
+      goal_id: g.id || g.goal,
+      name: g.goal,
+      priority: g.priority || 'secondary',
+      deadline: g.timeline,
+      progress_pct: g.progress_pct || 0,
+    }));
+  } catch { /* ignore */ }
+  return goals;
 }
 
 function getInitialGreeting(name, context) {
@@ -442,6 +470,96 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
     return lower.includes('what should') || lower.includes('recommend') || lower.includes('learn next') || lower.includes('suggest');
   }
 
+  // Dispatcher: cards may pass either a string (replay as user message) or
+  // a structured action object — book a slot, find slots, etc. Project
+  // Manager Mode (V3) routes structured actions to backend calls directly
+  // rather than round-tripping through Claude.
+  async function dispatchAction(arg) {
+    if (typeof arg === "string") {
+      sendMessage(arg);
+      return;
+    }
+    if (arg?.type === "find_slots") {
+      handleFindSlots(arg);
+      return;
+    }
+    if (arg?.type === "book_slot") {
+      handleBookSlot(arg);
+      return;
+    }
+    sendMessage(String(arg));
+  }
+
+  async function handleFindSlots({ stepTitle } = {}) {
+    setIsTyping(true);
+    try {
+      const userId = user?.id || "demo-user";
+      const rhythm = (context?.preferences?.learning_rhythm) || "default";
+      // Phase C — pass active goals for multi-goal weighting. Reads from
+      // localStorage (Phase 1 store); Path Engine task will move this to backend.
+      const goals = readActiveGoals();
+      const result = await findSlots({ userId, durationMin: 30, count: 3, rhythm, goals });
+      const slots = result?.slots || [];
+      const connected = result?.connected;
+      const multiGoal = goals.length > 1 && slots.some(s => s.goal_id);
+      const intro = connected
+        ? `Here are 3 open slots from your Google Calendar${multiGoal ? ', balanced across your active goals' : ''}:`
+        : `Here are 3 open slots that fit a 30-minute learning session${multiGoal ? ', balanced across your active goals' : ''} (Google Calendar will surface real free/busy once connected):`;
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: intro,
+        cards: [{ type: "calendar_slots", slots, stepTitle }],
+        timestamp: new Date(),
+      }]);
+    } catch (err) {
+      console.log("findSlots failed:", err.message);
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: "I couldn't reach your calendar. Try again in a moment, or pick a time and I'll book it.",
+        timestamp: new Date(),
+      }]);
+    }
+    setIsTyping(false);
+  }
+
+  async function handleBookSlot({ slot, stepTitle }) {
+    if (!slot?.start || !slot?.end) {
+      sendMessage(`Schedule for ${slot?.day || "later"} at ${slot?.time || "TBD"}`);
+      return;
+    }
+    setIsTyping(true);
+    try {
+      const userId = user?.id || "demo-user";
+      const title = stepTitle || "Learning session";
+      const result = await bookSlot({
+        userId,
+        stepTitle: title,
+        startAt: slot.start,
+        endAt: slot.end,
+      });
+      const booked = !!result?.calendar_event_id;
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: booked
+          ? `Booked. ${slot.day} at ${slot.time} — "${title}" is on your calendar. I'll nudge you 5 minutes before.`
+          : "Couldn't book that slot. Want me to try another?",
+        timestamp: new Date(),
+      }]);
+    } catch (err) {
+      console.log("bookSlot failed:", err.message);
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: "Couldn't reach the calendar to book. Try again in a moment.",
+        timestamp: new Date(),
+      }]);
+    }
+    setIsTyping(false);
+  }
+
   async function sendMessage(text) {
     if (!text.trim()) return;
 
@@ -781,7 +899,7 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
       <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar">
         <div className="max-w-2xl mx-auto flex flex-col gap-5">
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} onAction={sendMessage} />
+            <MessageBubble key={msg.id} message={msg} onAction={dispatchAction} />
           ))}
           {isTyping && (
             <div className="flex items-center gap-2">

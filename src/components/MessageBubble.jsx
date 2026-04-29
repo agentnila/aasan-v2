@@ -1,3 +1,5 @@
+import { useState, useMemo } from "react";
+
 export default function MessageBubble({ message, onAction }) {
   const isUser = message.role === "user";
 
@@ -79,6 +81,9 @@ export default function MessageBubble({ message, onAction }) {
               )}
               {card.type === "tailored_resume" && (
                 <TailoredResumeCard card={card} onAction={onAction} />
+              )}
+              {card.type === "resume_journal" && (
+                <ResumeJournalCard card={card} onAction={onAction} />
               )}
             </div>
           ))}
@@ -274,7 +279,13 @@ function SchedulingCard({ card, onAction }) {
         {card.actions.map((action, i) => (
           <button
             key={i}
-            onClick={() => onAction(action.label)}
+            onClick={() => {
+              if (action.action === "find_slots") {
+                onAction({ type: "find_slots", stepTitle: card.stepTitle });
+              } else {
+                onAction(action.label);
+              }
+            }}
             className={`w-full py-2.5 text-[12px] font-medium rounded-lg transition-all ${
               i === 0
                 ? "bg-navy text-white hover:bg-navy/90"
@@ -305,7 +316,7 @@ function CalendarSlotsCard({ card, onAction }) {
         {card.slots.map((slot, i) => (
           <button
             key={i}
-            onClick={() => onAction(`Schedule for ${slot.day} at ${slot.time}`)}
+            onClick={() => onAction({ type: "book_slot", slot, stepTitle: card.stepTitle })}
             className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-navy/30 hover:bg-navy/[0.02] transition-all text-left w-full group"
           >
             <div className="w-10 text-center shrink-0">
@@ -315,6 +326,11 @@ function CalendarSlotsCard({ card, onAction }) {
             <div className="flex-1 min-w-0">
               <p className="text-[12px] font-medium text-text-primary">{slot.time}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">{slot.fit}</p>
+              {slot.goal_name && (
+                <span className="inline-block mt-1 text-[9px] font-medium text-navy bg-navy/[0.06] rounded-full px-2 py-0.5">
+                  Goal: {slot.goal_name}
+                </span>
+              )}
             </div>
             <span className="text-[10px] text-navy opacity-0 group-hover:opacity-100 font-medium transition-opacity shrink-0">
               Book →
@@ -1150,6 +1166,178 @@ function TailoredResumeCard({ card, onAction }) {
         <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
         <ModeBadge mode={card.modes?.classifier} label="Claude" />
         <span className="text-[9px] text-gray-400 italic ml-auto">Drawn from your living service record</span>
+      </div>
+    </div>
+  );
+}
+
+const CATEGORY_LABELS = {
+  project:           { label: "Project",          dot: "bg-emerald-500" },
+  customer:          { label: "Customer",         dot: "bg-blue-500" },
+  tech_adoption:     { label: "Tech adoption",    dot: "bg-violet-500" },
+  mentoring:         { label: "Mentoring",        dot: "bg-amber-500" },
+  presentation:      { label: "Presentation",     dot: "bg-pink-500" },
+  crisis_response:   { label: "Crisis response",  dot: "bg-red-500" },
+  documentation:     { label: "Documentation",    dot: "bg-teal-500" },
+  leadership:        { label: "Leadership",       dot: "bg-orange-500" },
+  solution:          { label: "Solution",         dot: "bg-cyan-500" },
+};
+
+function categoryMeta(cat) {
+  return CATEGORY_LABELS[cat] || { label: cat || "other", dot: "bg-gray-400" };
+}
+
+function ResumeJournalCard({ card }) {
+  const [query, setQuery] = useState("");
+  const [activeCat, setActiveCat] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+
+  const entries = card.entries || [];
+  const byCategory = card.by_category || {};
+  const categoriesPresent = useMemo(
+    () => Object.keys(byCategory).sort((a, b) => byCategory[b] - byCategory[a]),
+    [byCategory],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return entries.filter((e) => {
+      if (activeCat && e.category !== activeCat) return false;
+      if (!q) return true;
+      const blob = [
+        e.title, e.description,
+        ...(e.outcomes || []),
+        ...(e.technologies || []),
+        ...(e.transferable_skills || []),
+        ...(e.stakeholders || []),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return blob.includes(q);
+    });
+  }, [entries, query, activeCat]);
+
+  return (
+    <div className="bg-white border border-emerald-100 rounded-xl shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-transparent border-b border-emerald-100">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="text-[10px] font-bold text-emerald-700 tracking-wider">📋 SERVICE RECORD</span>
+          <span className="ml-auto text-[10px] font-mono text-emerald-700">{card.entry_count ?? entries.length} entries</span>
+        </div>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          Your living journal. Every entry is searchable forever — and feeds the resume tailor when a job posting lands.
+        </p>
+      </div>
+
+      {/* Search + filter */}
+      <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search title, outcomes, tech, skills…"
+          className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-[11px] focus:outline-none focus:border-emerald-400"
+        />
+        <div className="flex flex-wrap gap-1">
+          <button
+            onClick={() => setActiveCat(null)}
+            className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+              !activeCat ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            All <span className="opacity-70">{entries.length}</span>
+          </button>
+          {categoriesPresent.map((cat) => {
+            const meta = categoryMeta(cat);
+            const active = activeCat === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCat(active ? null : cat)}
+                className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors flex items-center gap-1 ${
+                  active ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+                {meta.label} <span className="opacity-70">{byCategory[cat]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Entries */}
+      <div className="max-h-96 overflow-y-auto">
+        {filtered.length === 0 && (
+          <p className="text-[11px] text-gray-400 px-4 py-6 text-center">No entries match.</p>
+        )}
+        {filtered.map((e, idx) => {
+          const meta = categoryMeta(e.category);
+          const isOpen = expandedId === e.entry_id;
+          return (
+            <div
+              key={e.entry_id || idx}
+              className={`px-4 py-3 ${idx === 0 ? "" : "border-t border-gray-50"}`}
+            >
+              <button
+                onClick={() => setExpandedId(isOpen ? null : e.entry_id)}
+                className="w-full text-left flex items-start gap-2 group"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${meta.dot}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[10px] font-mono text-gray-400 shrink-0">{e.date}</span>
+                    <span className="text-[12px] font-semibold text-text-primary truncate">{e.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[9px] text-gray-500">{meta.label}</span>
+                    {(e.outcomes || []).slice(0, 1).map((o, i) => (
+                      <span key={i} className="text-[10px] text-gray-500 truncate">· {o}</span>
+                    ))}
+                  </div>
+                </div>
+                <span className={`text-[9px] text-gray-400 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
+              </button>
+              {isOpen && (
+                <div className="ml-3 pl-3 border-l-2 border-emerald-100 mt-2 space-y-2">
+                  {e.description && <p className="text-[11px] text-gray-700 leading-relaxed">{e.description}</p>}
+                  {(e.outcomes || []).length > 0 && (
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1">OUTCOMES</p>
+                      <ul className="space-y-0.5">
+                        {e.outcomes.map((o, i) => (
+                          <li key={i} className="text-[11px] text-gray-700 leading-relaxed">· {o}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(e.technologies || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {e.technologies.map((t, i) => (
+                        <span key={i} className="text-[9px] bg-violet-50 text-violet-700 rounded-full px-2 py-0.5">{t}</span>
+                      ))}
+                    </div>
+                  )}
+                  {(e.transferable_skills || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {e.transferable_skills.map((s, i) => (
+                        <span key={i} className="text-[9px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">{s}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+        <span className="text-[9px] text-gray-400">
+          {filtered.length} of {entries.length}{query || activeCat ? " (filtered)" : ""}
+        </span>
+        <span className="text-[9px] text-gray-400 italic">Add more via "✍ Log a work entry"</span>
       </div>
     </div>
   );

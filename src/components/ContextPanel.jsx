@@ -6,6 +6,20 @@ function getSavedGoal() {
   } catch { return null; }
 }
 
+function formatBlockTime(startIso, endIso) {
+  try {
+    const s = new Date(startIso)
+    const e = new Date(endIso)
+    const today = new Date()
+    const isToday = s.toDateString() === today.toDateString()
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+    const isTomorrow = s.toDateString() === tomorrow.toDateString()
+    const dayLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : s.toLocaleDateString(undefined, { weekday: 'short' })
+    const fmt = (d) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    return `${dayLabel} ${fmt(s)} – ${fmt(e)}`
+  } catch { return startIso }
+}
+
 export default function ContextPanel({ data, context, contextLoading }) {
   const { user } = useUser()
   const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Employee'
@@ -18,6 +32,8 @@ export default function ContextPanel({ data, context, contextLoading }) {
   const reviewsDue = context?.reviews_due || []
   // memories stored for Peraasan use
   const _memories = context?.memories || []
+  const upcomingBlocks = context?.schedule?.upcoming || []
+  const conflictPending = context?.schedule?.conflict_pending || []
 
   // Goal from localStorage (set during onboarding)
   const savedGoal = getSavedGoal()
@@ -97,6 +113,29 @@ export default function ContextPanel({ data, context, contextLoading }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Upcoming learning blocks (V3 — Project Manager Mode) */}
+      {(upcomingBlocks.length > 0 || conflictPending.length > 0) && (
+        <div className="px-5 py-4 border-b border-gray-50">
+          <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-2">UPCOMING LEARNING BLOCKS</p>
+          {upcomingBlocks.slice(0, 3).map((b) => (
+            <div key={b.block_id} className="flex items-start gap-2 mb-2 last:mb-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-navy mt-1.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-medium text-text-primary truncate">{b.step_title}</p>
+                <p className="text-[9px] text-gray-400">{formatBlockTime(b.start_at, b.end_at)}</p>
+              </div>
+            </div>
+          ))}
+          {conflictPending.length > 0 && (
+            <div className="mt-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-md">
+              <p className="text-[10px] text-amber-700 font-medium">
+                {conflictPending.length} block{conflictPending.length > 1 ? 's' : ''} now conflict with another meeting — Peraasan will offer a reschedule
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -125,6 +125,26 @@ export default function SourcesNav() {
     setCareerScanning(false);
   }
 
+  async function handleShowResumeJournal() {
+    setResumeLoading(true);
+    setResumeStatus("Loading your service record…");
+    try {
+      const result = await agent.listJournal(user?.id || "demo-user");
+      const n = result.entry_count || (result.entries || []).length;
+      setResumeJournalCount(n);
+      const summary = n === 0
+        ? "Your service record is empty. Tell Peraasan what you've done — every entry is searchable forever."
+        : `Your service record — ${n} entries across ${Object.keys(result.by_category || {}).length} categories. Search or filter inline.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: { messageContent: summary, card: { type: "resume_journal", ...result } },
+      }));
+      setResumeStatus(`✓ ${n} entries posted to chat`);
+    } catch (err) {
+      setResumeStatus(`Error: ${err.message}`);
+    }
+    setResumeLoading(false);
+  }
+
   async function handleResumeSubmit() {
     const text = resumeText.trim();
     if (!text) return;
@@ -819,6 +839,17 @@ export default function SourcesNav() {
               className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
             >
               ✍ Log a work entry
+            </button>
+            <button
+              onClick={handleShowResumeJournal}
+              disabled={resumeLoading}
+              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+                resumeLoading
+                  ? "bg-emerald-100 text-emerald-400 cursor-wait"
+                  : "bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              }`}
+            >
+              {resumeLoading && resumeStatus?.startsWith("Loading") ? "Loading…" : "📖 Show my record"}
             </button>
             <button
               onClick={() => { setResumeMode("tailor"); setResumeStatus(null); }}

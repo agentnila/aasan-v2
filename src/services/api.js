@@ -254,6 +254,81 @@ export async function agentSearchTabs(query) {
 }
 
 // ─────────────────────────────────────────────
+// PROJECT MANAGER MODE — Calendar scheduling (V3)
+// Solution Arch §14.A. Backend uses stub busy windows until
+// Google Calendar OAuth is wired (Phase B).
+// ─────────────────────────────────────────────
+
+export async function findSlots({ userId, durationMin = 30, count = 3, rhythm = "default", windowStart, windowEnd, goals } = {}) {
+  const res = await fetch(`${RENDER_URL}/calendar/find_slots`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      user_id: userId,
+      duration_min: durationMin,
+      count,
+      rhythm,
+      window_start: windowStart,
+      window_end: windowEnd,
+      goals,
+    }),
+  });
+  return res.json();
+}
+
+export async function getGoalBudget(goals, totalMinutesPerWeek = 300) {
+  const res = await fetch(`${RENDER_URL}/calendar/goal_budget`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ goals, total_minutes_per_week: totalMinutesPerWeek }),
+  });
+  return res.json();
+}
+
+export async function bookSlot({ userId, pathStepId, stepTitle, startAt, endAt, description } = {}) {
+  const res = await fetch(`${RENDER_URL}/calendar/book`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      user_id: userId,
+      path_step_id: pathStepId,
+      step_title: stepTitle,
+      start_at: startAt,
+      end_at: endAt,
+      description,
+    }),
+  });
+  return res.json();
+}
+
+export async function rescheduleBlock({ blockId, newStartAt, newEndAt } = {}) {
+  const res = await fetch(`${RENDER_URL}/calendar/reschedule`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ block_id: blockId, new_start_at: newStartAt, new_end_at: newEndAt }),
+  });
+  return res.json();
+}
+
+export async function cancelBlock(blockId) {
+  const res = await fetch(`${RENDER_URL}/calendar/cancel`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ block_id: blockId }),
+  });
+  return res.json();
+}
+
+export async function listBlocks(userId, { includePast = false } = {}) {
+  const res = await fetch(`${RENDER_URL}/calendar/blocks`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ user_id: userId, include_past: includePast }),
+  });
+  return res.json();
+}
+
+// ─────────────────────────────────────────────
 // PERPLEXITY COMPUTER (local AI agent)
 // Future: communicates with Computer running locally
 // ─────────────────────────────────────────────

@@ -88,6 +88,9 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "sme_registered" && (
                 <SMERegisteredCard card={card} onAction={onAction} />
               )}
+              {card.type === "sme_browse" && (
+                <SMEBrowseCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -1169,6 +1172,204 @@ function TailoredResumeCard({ card, onAction }) {
         <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
         <ModeBadge mode={card.modes?.classifier} label="Claude" />
         <span className="text-[9px] text-gray-400 italic ml-auto">Drawn from your living service record</span>
+      </div>
+    </div>
+  );
+}
+
+function SMEBrowseCard({ card, onAction }) {
+  const [query, setQuery] = useState("");
+  const [activeSubject, setActiveSubject] = useState(null);
+  const [activeType, setActiveType] = useState(null); // null | "internal" | "external"
+  const [expandedId, setExpandedId] = useState(null);
+
+  const smes = card.smes || [];
+
+  const subjectsTop = useMemo(() => {
+    const counts = new Map();
+    smes.forEach(s => (s.topics || []).forEach(t => counts.set(t, (counts.get(t) || 0) + 1)));
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 12);
+  }, [smes]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return smes.filter(s => {
+      if (activeType && s.sme_type !== activeType) return false;
+      if (activeSubject && !(s.topics || []).includes(activeSubject)) return false;
+      if (!q) return true;
+      const blob = [
+        s.name, s.role, s.team, s.bio,
+        s.expectations_from_students,
+        ...(s.topics || []),
+        ...(s.languages || []),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return blob.includes(q);
+    });
+  }, [smes, query, activeSubject, activeType]);
+
+  function rateLabel(s) {
+    if (s.rate_model === "free") return "Free";
+    if (s.rate_model === "paid") return `${(s.rate_currency || "usd").toUpperCase()} ${s.rate_per_30min}/30 min`;
+    if (s.rate_per_30min > 0) return `${(s.rate_currency || "usd").toUpperCase()} ${s.rate_per_30min}/30 min`;
+    return s.sme_type === "external" ? "Curated · contact" : "Kudos only";
+  }
+
+  function bookHref(s) {
+    return () => onAction?.(`Book ${s.name} for ${s.topics?.[0] || "a session"}`);
+  }
+
+  return (
+    <div className="bg-white border border-rose-100 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-4 py-3 bg-gradient-to-r from-rose-50 to-transparent border-b border-rose-100">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          <span className="text-[10px] font-bold text-rose-700 tracking-wider">🤝 SME MARKETPLACE</span>
+          <span className="ml-auto text-[10px] font-mono text-rose-700">{card.count ?? smes.length} SMEs</span>
+        </div>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          {card.registered_count || 0} self-registered · {card.demo_seed_count || 0} curated. Search by name/topic or filter, click any SME for details.
+        </p>
+      </div>
+
+      <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name, subject, role, bio…"
+          className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-[11px] focus:outline-none focus:border-rose-400"
+        />
+        <div className="flex flex-wrap gap-1">
+          <button
+            onClick={() => { setActiveSubject(null); setActiveType(null); }}
+            className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+              !activeSubject && !activeType ? "bg-rose-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            All <span className="opacity-70">{smes.length}</span>
+          </button>
+          {["internal", "external"].map(t => (
+            <button
+              key={t}
+              onClick={() => setActiveType(activeType === t ? null : t)}
+              className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+                activeType === t ? "bg-rose-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {t === "internal" ? "🏢 Internal" : "🌐 External"}
+            </button>
+          ))}
+          {subjectsTop.map(([subject, count]) => {
+            const active = activeSubject === subject;
+            return (
+              <button
+                key={subject}
+                onClick={() => setActiveSubject(active ? null : subject)}
+                className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+                  active ? "bg-rose-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {subject} <span className="opacity-70">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="max-h-[28rem] overflow-y-auto">
+        {filtered.length === 0 && (
+          <p className="text-[11px] text-gray-400 px-4 py-6 text-center">No SMEs match.</p>
+        )}
+        {filtered.map((s, i) => {
+          const isOpen = expandedId === s.sme_id;
+          const isInternal = s.sme_type === "internal";
+          return (
+            <div key={s.sme_id || i} className={`px-4 py-3 ${i === 0 ? "" : "border-t border-gray-50"}`}>
+              <button
+                onClick={() => setExpandedId(isOpen ? null : s.sme_id)}
+                className="w-full text-left flex items-start gap-2.5 group"
+              >
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                  isInternal ? "bg-rose-100 text-rose-700" : "bg-violet-100 text-violet-700"
+                }`}>
+                  {(s.name || "?").split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[12px] font-semibold text-text-primary truncate">{s.name}</span>
+                    <span className="text-[9px] text-gray-400 shrink-0">{isInternal ? "internal" : "external"}</span>
+                  </div>
+                  {(s.role || s.team) && (
+                    <p className="text-[10px] text-gray-500 truncate">
+                      {s.role}{s.team ? ` · ${s.team}` : ""}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(s.topics || []).slice(0, 4).map((t, j) => (
+                      <span key={j} className="text-[9px] bg-rose-50 text-rose-700 rounded-full px-1.5 py-0.5">{t}</span>
+                    ))}
+                    {(s.topics || []).length > 4 && (
+                      <span className="text-[9px] text-gray-400">+{(s.topics || []).length - 4}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] font-medium text-gray-700">{rateLabel(s)}</p>
+                  <p className="text-[9px] text-gray-400">⭐ {(s.kudos_score ?? 5).toFixed(1)}</p>
+                </div>
+                <span className={`text-[9px] text-gray-400 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
+              </button>
+
+              {isOpen && (
+                <div className="ml-9 pl-2 border-l-2 border-rose-100 mt-3 space-y-2.5">
+                  {s.bio && (
+                    <p className="text-[11px] text-gray-700 leading-relaxed">{s.bio}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">SCHEDULE</p>
+                      <p className="text-gray-700">{s.schedule_window || s.availability_window || s.next_available || "—"}</p>
+                      {s.timezone && <p className="text-[9px] text-gray-400 mt-0.5">{s.timezone}</p>}
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">SESSION</p>
+                      <p className="text-gray-700">
+                        {s.preferred_session_length || 30} min · {rateLabel(s)}
+                      </p>
+                      {(s.languages || []).length > 0 && (
+                        <p className="text-[9px] text-gray-400 mt-0.5">{s.languages.join(", ").toUpperCase()}</p>
+                      )}
+                    </div>
+                  </div>
+                  {s.expectations_from_students && (
+                    <div className="bg-rose-50/40 border border-rose-100 rounded-md px-2.5 py-2">
+                      <p className="text-[9px] font-semibold text-rose-700 tracking-wider mb-0.5">⚡ READ THIS BEFORE BOOKING</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">{s.expectations_from_students}</p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <p className="text-[10px] text-gray-400">
+                      {s.sessions_completed > 0 ? `${s.sessions_completed} session${s.sessions_completed !== 1 ? "s" : ""} completed` : "New SME"}
+                    </p>
+                    <button
+                      onClick={bookHref(s)}
+                      className="text-[11px] font-semibold bg-rose-600 text-white hover:bg-rose-700 rounded-md px-3 py-1.5 transition-colors"
+                    >
+                      Book {s.name.split(" ")[0]} →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+        <span className="text-[9px] text-gray-400">
+          {filtered.length} of {smes.length}{query || activeSubject || activeType ? " (filtered)" : ""}
+        </span>
+        <span className="text-[9px] text-gray-400 italic">Don't see your topic? "📚 Become an SME"</span>
       </div>
     </div>
   );

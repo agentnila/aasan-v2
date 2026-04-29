@@ -160,6 +160,25 @@ export default function SourcesNav() {
     setResumeLoading(false);
   }
 
+  async function handleBrowseSMEs() {
+    setSmeLoading(true);
+    setSmeLastAction("Loading marketplace…");
+    try {
+      const result = await agent.listSMEs({ activeOnly: true, limit: 100 });
+      const n = result?.count ?? 0;
+      const summary = n === 0
+        ? "No SMEs registered yet. Be the first — click '📚 Become an SME'."
+        : `${n} SMEs in the marketplace · ${result.registered_count || 0} self-registered + ${result.demo_seed_count || 0} curated. Search or filter inline.`;
+      window.dispatchEvent(new CustomEvent("aasan:digest", {
+        detail: { messageContent: summary, card: { type: "sme_browse", ...result } },
+      }));
+      setSmeLastAction(`✓ ${n} SMEs posted to chat`);
+    } catch (err) {
+      setSmeLastAction(`Error: ${err.message}`);
+    }
+    setSmeLoading(false);
+  }
+
   async function handleStartSMERegister() {
     setSmeMode("register");
     setSmeLastAction(null);
@@ -980,6 +999,16 @@ export default function SourcesNav() {
                 }`}
               >
                 {smeLoading ? "Matching…" : "🤝 Find an SME"}
+              </button>
+              <button
+                onClick={handleBrowseSMEs}
+                disabled={smeLoading}
+                className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+                  smeLoading ? "bg-rose-100 text-rose-400 cursor-wait"
+                    : "bg-white border border-rose-300 text-rose-700 hover:bg-rose-50"
+                }`}
+              >
+                👥 Browse the marketplace
               </button>
               <button
                 onClick={handleStartSMERegister}

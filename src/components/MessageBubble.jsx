@@ -85,6 +85,9 @@ export default function MessageBubble({ message, onAction }) {
               {card.type === "resume_journal" && (
                 <ResumeJournalCard card={card} onAction={onAction} />
               )}
+              {card.type === "sme_registered" && (
+                <SMERegisteredCard card={card} onAction={onAction} />
+              )}
             </div>
           ))}
       </div>
@@ -1166,6 +1169,68 @@ function TailoredResumeCard({ card, onAction }) {
         <ModeBadge mode={card.modes?.computer} label="Perplexity Computer" />
         <ModeBadge mode={card.modes?.classifier} label="Claude" />
         <span className="text-[9px] text-gray-400 italic ml-auto">Drawn from your living service record</span>
+      </div>
+    </div>
+  );
+}
+
+function SMERegisteredCard({ card }) {
+  const sme = card.sme || {};
+  const created = card.created;
+  const subjects = sme.topics || [];
+  const languages = sme.languages || [];
+  const rateLabel =
+    sme.rate_model === "free" ? "Free"
+    : sme.rate_model === "paid" ? `${(sme.rate_currency || "USD").toUpperCase()} ${sme.rate_per_30min}/30 min`
+    : "Kudos only";
+  return (
+    <div className="bg-white border border-rose-100 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-4 py-3 bg-gradient-to-r from-rose-50 to-transparent border-b border-rose-100">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          <span className="text-[10px] font-bold text-rose-700 tracking-wider">
+            🤝 SME PROFILE {created ? "REGISTERED" : "UPDATED"}
+          </span>
+          <span className="ml-auto text-[10px] text-rose-700">{sme.name}</span>
+        </div>
+        {sme.role && <p className="text-[11px] text-gray-500 mt-1">{sme.role}{sme.team ? ` · ${sme.team}` : ""}</p>}
+      </div>
+      <div className="px-4 py-3 space-y-2.5">
+        <div>
+          <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1">SUBJECTS</p>
+          <div className="flex flex-wrap gap-1">
+            {subjects.map((s, i) => (
+              <span key={i} className="text-[10px] bg-rose-50 text-rose-700 rounded-full px-2 py-0.5">{s}</span>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div>
+            <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">SCHEDULE</p>
+            <p className="text-gray-700">{sme.schedule_window || "—"}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5">{sme.timezone}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">SESSION</p>
+            <p className="text-gray-700">{sme.preferred_session_length} min · {rateLabel}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5">{languages.join(", ").toUpperCase()}</p>
+          </div>
+        </div>
+        {sme.expectations_from_students && (
+          <div>
+            <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">WHAT TO DO BEFORE BOOKING</p>
+            <p className="text-[11px] text-gray-700 leading-relaxed">{sme.expectations_from_students}</p>
+          </div>
+        )}
+        {sme.bio && (
+          <div>
+            <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-0.5">BIO</p>
+            <p className="text-[11px] text-gray-600 leading-relaxed">{sme.bio}</p>
+          </div>
+        )}
+      </div>
+      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50">
+        <p className="text-[9px] text-gray-400 italic">Re-open "📚 Become an SME" to edit any time.</p>
       </div>
     </div>
   );

@@ -36,6 +36,21 @@ export default function SourcesNav() {
   const [smeTopic, setSmeTopic] = useState("Service Mesh");
   const [smeLoading, setSmeLoading] = useState(false);
   const [smeLastAction, setSmeLastAction] = useState(null);
+  // SME self-registration form state
+  const [smeMode, setSmeMode] = useState(null); // null | "register"
+  const [smeRegistering, setSmeRegistering] = useState(false);
+  const [smeForm, setSmeForm] = useState(() => ({
+    name: "", role: "", subjects: "",
+    schedule_window: "",
+    timezone: typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC",
+    languages: "en",
+    rate_model: "kudos_only",
+    rate_per_30min: "",
+    rate_currency: "usd",
+    expectations_from_students: "",
+    bio: "",
+    preferred_session_length: 30,
+  }));
   const [resumeMode, setResumeMode] = useState(null); // null | "add" | "tailor"
   const [resumeText, setResumeText] = useState("");
   const [resumeLoading, setResumeLoading] = useState(false);
@@ -143,6 +158,76 @@ export default function SourcesNav() {
       setResumeStatus(`Error: ${err.message}`);
     }
     setResumeLoading(false);
+  }
+
+  async function handleStartSMERegister() {
+    setSmeMode("register");
+    setSmeLastAction(null);
+    // Pre-fill from existing profile if user has one (idempotent edits)
+    if (user?.id) {
+      try {
+        const existing = await agent.getSMEProfile(user.id);
+        if (existing?.registered && existing.sme) {
+          const s = existing.sme;
+          setSmeForm({
+            name: s.name || `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+            role: s.role || "",
+            subjects: (s.topics || []).join(", "),
+            schedule_window: s.schedule_window || s.availability_window || "",
+            timezone: s.timezone || (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"),
+            languages: (s.languages || ["en"]).join(", "),
+            rate_model: s.rate_model || "kudos_only",
+            rate_per_30min: String(s.rate_per_30min ?? ""),
+            rate_currency: (s.rate_currency || "usd").toUpperCase(),
+            expectations_from_students: s.expectations_from_students || "",
+            bio: s.bio || "",
+            preferred_session_length: Number(s.preferred_session_length || 30),
+          });
+        } else {
+          setSmeForm(prev => ({ ...prev, name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || prev.name }));
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  async function handleSubmitSMERegister() {
+    setSmeRegistering(true);
+    setSmeLastAction("Registering…");
+    try {
+      const subjects = smeForm.subjects.split(",").map(s => s.trim()).filter(Boolean);
+      const languages = smeForm.languages.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      const profile = {
+        name: smeForm.name.trim(),
+        role: smeForm.role.trim(),
+        subjects,
+        schedule_window: smeForm.schedule_window.trim(),
+        timezone: smeForm.timezone,
+        languages,
+        rate_model: smeForm.rate_model,
+        ...(smeForm.rate_model === "paid" ? {
+          rate_per_30min: Number(smeForm.rate_per_30min) || 0,
+          rate_currency: smeForm.rate_currency,
+        } : {}),
+        expectations_from_students: smeForm.expectations_from_students.trim(),
+        bio: smeForm.bio.trim(),
+        preferred_session_length: Number(smeForm.preferred_session_length),
+      };
+      const result = await agent.registerSME(user?.id || "demo-user", profile);
+      if (result?.error) {
+        setSmeLastAction(`Error: ${result.error}`);
+      } else {
+        const created = result?.created ? "registered" : "updated";
+        const summary = `You're ${created} as an SME on ${subjects.length} topic${subjects.length !== 1 ? "s" : ""}: ${subjects.join(", ")}. Learners will see you in matches.`;
+        window.dispatchEvent(new CustomEvent("aasan:digest", {
+          detail: { messageContent: summary, card: { type: "sme_registered", ...result } },
+        }));
+        setSmeLastAction(`✓ ${created.charAt(0).toUpperCase() + created.slice(1)} · posted to chat`);
+        setSmeMode(null);
+      }
+    } catch (err) {
+      setSmeLastAction(`Error: ${err.message}`);
+    }
+    setSmeRegistering(false);
   }
 
   async function handleResumeSubmit() {
@@ -789,33 +874,122 @@ export default function SourcesNav() {
           <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
           <p className="text-[10px] text-rose-700 font-bold tracking-wider">🤝 SME MARKETPLACE</p>
         </div>
-        <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
-          When AI isn't enough — find a human. Internal teammates (auto-derived from mastery) + curated external experts.
-        </p>
-        <input
-          type="text"
-          value={smeTopic}
-          onChange={(e) => setSmeTopic(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleFindSMEs();
-          }}
-          disabled={smeLoading}
-          placeholder="topic (e.g. Service Mesh)"
-          className="w-full px-2.5 py-2 mb-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none disabled:bg-gray-50"
-        />
-        <button
-          onClick={handleFindSMEs}
-          disabled={smeLoading || !smeTopic.trim()}
-          className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
-            smeLoading
-              ? "bg-rose-100 text-rose-400 cursor-wait"
-              : !smeTopic.trim()
-              ? "bg-rose-200 text-rose-400 cursor-not-allowed"
-              : "bg-rose-600 text-white hover:bg-rose-700"
-          }`}
-        >
-          {smeLoading ? "Matching…" : "🤝 Find an SME"}
-        </button>
+
+        {smeMode === "register" ? (
+          <>
+            <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+              Tell learners who you are, what you'll teach, and what to expect. Idempotent — re-submit any time to update.
+            </p>
+            <div className="space-y-1.5">
+              <input value={smeForm.name} onChange={(e) => setSmeForm({...smeForm, name: e.target.value})}
+                placeholder="Display name *"
+                className="w-full px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none" />
+              <input value={smeForm.role} onChange={(e) => setSmeForm({...smeForm, role: e.target.value})}
+                placeholder="Role / title (e.g. Senior SRE, Platform team)"
+                className="w-full px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none" />
+              <textarea value={smeForm.subjects} onChange={(e) => setSmeForm({...smeForm, subjects: e.target.value})}
+                placeholder="Subjects you'll teach * (comma-separated, e.g. Service Mesh, Istio, mTLS)"
+                rows={2}
+                className="w-full px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none resize-none" />
+              <input value={smeForm.schedule_window} onChange={(e) => setSmeForm({...smeForm, schedule_window: e.target.value})}
+                placeholder="Schedule window (e.g. Tue/Thu 4-6pm, 30-min slots)"
+                className="w-full px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none" />
+              <div className="grid grid-cols-2 gap-1.5">
+                <input value={smeForm.timezone} onChange={(e) => setSmeForm({...smeForm, timezone: e.target.value})}
+                  placeholder="Time zone"
+                  title="IANA time zone (auto-detected from your browser)"
+                  className="px-2 py-1.5 rounded-lg text-[10px] border border-rose-200 focus:border-rose-500 focus:outline-none" />
+                <input value={smeForm.languages} onChange={(e) => setSmeForm({...smeForm, languages: e.target.value})}
+                  placeholder="Languages (en, es)"
+                  className="px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <select value={smeForm.rate_model} onChange={(e) => setSmeForm({...smeForm, rate_model: e.target.value})}
+                  className="flex-1 px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none bg-white">
+                  <option value="free">Free</option>
+                  <option value="kudos_only">Kudos only</option>
+                  <option value="paid">Paid</option>
+                </select>
+                {smeForm.rate_model === "paid" && (
+                  <>
+                    <input value={smeForm.rate_per_30min} onChange={(e) => setSmeForm({...smeForm, rate_per_30min: e.target.value})}
+                      placeholder="$/30 min" type="number" min="0"
+                      className="w-20 px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none" />
+                    <select value={smeForm.rate_currency} onChange={(e) => setSmeForm({...smeForm, rate_currency: e.target.value})}
+                      className="w-16 px-1 py-1.5 rounded-lg text-[10px] border border-rose-200 focus:border-rose-500 focus:outline-none bg-white uppercase">
+                      <option value="usd">USD</option>
+                      <option value="eur">EUR</option>
+                      <option value="inr">INR</option>
+                      <option value="gbp">GBP</option>
+                    </select>
+                  </>
+                )}
+              </div>
+              <select value={smeForm.preferred_session_length} onChange={(e) => setSmeForm({...smeForm, preferred_session_length: Number(e.target.value)})}
+                className="w-full px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none bg-white">
+                <option value={15}>15-min sessions</option>
+                <option value={30}>30-min sessions</option>
+                <option value={45}>45-min sessions</option>
+                <option value={60}>60-min sessions</option>
+              </select>
+              <textarea value={smeForm.expectations_from_students} onChange={(e) => setSmeForm({...smeForm, expectations_from_students: e.target.value})}
+                placeholder="What you expect from students before booking (e.g. 'Read the README. Watch the 8-min Istio overview. Bring 1 specific question, not — explain Istio.')"
+                rows={3}
+                className="w-full px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none resize-none" />
+              <textarea value={smeForm.bio} onChange={(e) => setSmeForm({...smeForm, bio: e.target.value})}
+                placeholder="Short bio (1-2 sentences)"
+                rows={2}
+                className="w-full px-2 py-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none resize-none" />
+              <div className="flex gap-1.5">
+                <button onClick={handleSubmitSMERegister}
+                  disabled={smeRegistering || !smeForm.name.trim() || !smeForm.subjects.trim()}
+                  className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold ${
+                    smeRegistering ? "bg-rose-100 text-rose-400 cursor-wait"
+                    : (!smeForm.name.trim() || !smeForm.subjects.trim()) ? "bg-rose-200 text-rose-400 cursor-not-allowed"
+                    : "bg-rose-600 text-white hover:bg-rose-700"
+                  }`}>
+                  {smeRegistering ? "Saving…" : "✅ Save my SME profile"}
+                </button>
+                <button onClick={() => { setSmeMode(null); setSmeLastAction(null); }}
+                  className="px-2.5 py-2 rounded-lg text-[11px] text-gray-500 hover:bg-gray-50">Cancel</button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
+              When AI isn't enough — find a human. Or share what you know — register as an SME and earn kudos / get booked.
+            </p>
+            <input
+              type="text"
+              value={smeTopic}
+              onChange={(e) => setSmeTopic(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleFindSMEs(); }}
+              disabled={smeLoading}
+              placeholder="topic (e.g. Service Mesh)"
+              className="w-full px-2.5 py-2 mb-1.5 rounded-lg text-[11px] border border-rose-200 focus:border-rose-500 focus:outline-none disabled:bg-gray-50"
+            />
+            <div className="space-y-1.5">
+              <button
+                onClick={handleFindSMEs}
+                disabled={smeLoading || !smeTopic.trim()}
+                className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+                  smeLoading ? "bg-rose-100 text-rose-400 cursor-wait"
+                    : !smeTopic.trim() ? "bg-rose-200 text-rose-400 cursor-not-allowed"
+                    : "bg-rose-600 text-white hover:bg-rose-700"
+                }`}
+              >
+                {smeLoading ? "Matching…" : "🤝 Find an SME"}
+              </button>
+              <button
+                onClick={handleStartSMERegister}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold bg-white border border-rose-300 text-rose-700 hover:bg-rose-50"
+              >
+                📚 Become an SME
+              </button>
+            </div>
+          </>
+        )}
         {smeLastAction && (
           <p className="mt-2 text-[10px] text-rose-700 italic">{smeLastAction}</p>
         )}

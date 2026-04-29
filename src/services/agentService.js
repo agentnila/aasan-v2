@@ -499,6 +499,49 @@ export async function findSMEs(topic, learnerId, limit = 5) {
   }
 }
 
+export async function registerSME(employeeId, profile) {
+  if (!employeeId) return { error: 'employee_id required' }
+  if (!profile?.name?.trim()) return { error: 'profile.name required' }
+  if (!profile?.subjects?.length) return { error: 'profile.subjects required' }
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/register`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ employee_id: employeeId, profile }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function getSMEProfile(employeeId) {
+  if (!employeeId) return { error: 'employee_id required' }
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/profile`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ employee_id: employeeId }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function listSMEs({ activeOnly = true, limit = 100 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/sme/list`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ active_only: activeOnly, limit }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, smes: [], count: 0 }
+  }
+}
+
 export async function bookSME(smeId, learnerId, topic, slot) {
   try {
     const res = await fetch(`${RENDER_URL}/sme/book`, {
@@ -955,6 +998,9 @@ const agent = {
   insertStepManual,
   // SME Marketplace
   findSMEs,
+  registerSME,
+  getSMEProfile,
+  listSMEs,
   bookSME,
   // Career Compass family
   runStayAhead,

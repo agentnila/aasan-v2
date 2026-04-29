@@ -137,6 +137,9 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
   const [reviewMode, setReviewMode] = useState(null); // { concept, question, index }
   // Goal onboarding: 0=ask goal, 1=ask why, 2=ask when, 3=ask criteria, 4=done
   const [goalStep, setGoalStep] = useState(isGoalSet() ? 4 : 0);
+  // Add-goal flow (additional goals after the primary). null = inactive.
+  const [addGoalStep, setAddGoalStep] = useState(null);
+  const [addGoalDraft, setAddGoalDraft] = useState({});
   const [goalData, setGoalData] = useState({ goal: '', objective: '', timeline: '', criteria: '' });
   const endRef = useRef(null);
   const contextLoadedRef = useRef(false);
@@ -159,7 +162,15 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
       ]);
     }
     window.addEventListener("aasan:digest", onDigest);
-    return () => window.removeEventListener("aasan:digest", onDigest);
+
+    // Trigger the chat-driven add-goal flow when SourcesNav fires this event.
+    function onStartAddGoal() { startAddGoalFlow(); }
+    window.addEventListener("aasan:start-add-goal", onStartAddGoal);
+
+    return () => {
+      window.removeEventListener("aasan:digest", onDigest);
+      window.removeEventListener("aasan:start-add-goal", onStartAddGoal);
+    };
   }, []);
 
   // Set initial greeting, update when context loads
@@ -362,6 +373,115 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
       content: `Let's review! First up: **${conceptName}**.\n\n${question}`,
       timestamp: new Date(),
     }]);
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // ADD-GOAL FLOW (V3) — chat-driven additional goal capture
+  //
+  // Distinct from the primary goal onboarding above. Triggered by the
+  // "✨ Add a goal" button in SourcesNav (window event 'aasan:start-add-goal').
+  // Captures name → why → timeline → success criteria, then calls
+  // /goal/create on the Path Engine. Persists to localStorage
+  // `aasan_secondary_goals` so multi-goal scheduling reads it.
+  // ──────────────────────────────────────────────────────────────
+  const ADD_GOAL_PROMPTS = [
+    "Let's add another goal. What do you want to achieve? (cert, skill, promotion, side-quest, etc.)",
+    (g) => `Got it — "${g}". Why is this one important to you right now? (one or two sentences)`,
+    () => "When would you like to achieve this by? (a date, a quarter, or 'no deadline')",
+    () => "How will you know you've succeeded? What's the success criteria?",
+  ];
+
+  async function startAddGoalFlow() {
+    setAddGoalStep(0);
+    setAddGoalDraft({});
+    setMessages(prev => [...prev, {
+      id: Date.now() + 1,
+      role: "peraasan",
+      content: ADD_GOAL_PROMPTS[0],
+      timestamp: new Date(),
+    }]);
+  }
+
+  async function handleAddGoalFlow(text) {
+    if (addGoalStep == null) return false;
+    const trimmed = text.trim();
+
+    if (addGoalStep === 0) {
+      setAddGoalDraft({ name: trimmed });
+      setAddGoalStep(1);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: "peraasan",
+        content: ADD_GOAL_PROMPTS[1](trimmed), timestamp: new Date(),
+      }]);
+      return true;
+    }
+    if (addGoalStep === 1) {
+      setAddGoalDraft(prev => ({ ...prev, objective: trimmed }));
+      setAddGoalStep(2);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: "peraasan",
+        content: ADD_GOAL_PROMPTS[2](), timestamp: new Date(),
+      }]);
+      return true;
+    }
+    if (addGoalStep === 2) {
+      setAddGoalDraft(prev => ({ ...prev, timeline: trimmed }));
+      setAddGoalStep(3);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: "peraasan",
+        content: ADD_GOAL_PROMPTS[3](), timestamp: new Date(),
+      }]);
+      return true;
+    }
+    if (addGoalStep === 3) {
+      const finalGoal = {
+        name: addGoalDraft.name,
+        objective: addGoalDraft.objective,
+        timeline: addGoalDraft.timeline,
+        success_criteria: trimmed,
+        priority: "secondary",
+      };
+      setAddGoalStep(null);
+      setAddGoalDraft({});
+
+      // Persist to backend Path Engine + localStorage secondary goals list
+      const uid = userId || user?.id || "demo-user";
+      let result;
+      try {
+        result = await agent.createGoal(uid, finalGoal);
+      } catch (err) {
+        result = { error: err.message };
+      }
+
+      try {
+        const existing = JSON.parse(localStorage.getItem("aasan_secondary_goals") || "[]");
+        existing.push({
+          id: result?.goal_id || `local-${Date.now()}`,
+          goal: finalGoal.name,
+          objective: finalGoal.objective,
+          timeline: finalGoal.timeline,
+          criteria: finalGoal.success_criteria,
+          priority: "secondary",
+          progress_pct: 0,
+          created_at: new Date().toISOString(),
+        });
+        localStorage.setItem("aasan_secondary_goals", JSON.stringify(existing));
+      } catch { /* ignore */ }
+
+      const ok = !!result?.goal_id;
+      const summary = ok
+        ? `Goal added.\n\n🎯 ${finalGoal.name}\n📌 ${finalGoal.objective}\n📅 ${finalGoal.timeline}\n✅ ${finalGoal.success_criteria}\n\nI'll weight this alongside your primary goal when finding learning slots and recommending next steps. Click 🎯 Show my goals in the left rail to see all goals.`
+        : `Couldn't save the goal to the Path Engine: ${result?.error || "unknown error"}. I've saved it locally — try /goal/create from the dashboard or retry.`;
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "peraasan",
+        content: summary,
+        cards: ok ? [{ type: "goal_added", goal_id: result.goal_id, goal: result.goal, path: result.path }] : [],
+        timestamp: new Date(),
+      }]);
+      return true;
+    }
+    return false;
   }
 
   // Handle goal onboarding flow — returns true if intercepted
@@ -650,6 +770,12 @@ export default function ChatPanel({ onContextChange, userName, context, userId }
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+
+    // Add-goal flow intercept (V3 — additional goals beyond the primary)
+    if (addGoalStep != null) {
+      const handled = await handleAddGoalFlow(text.trim());
+      if (handled) return;
+    }
 
     // Goal onboarding intercept
     if (goalStep < 4) {

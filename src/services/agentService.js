@@ -666,6 +666,21 @@ function _stubFindSMEs(topic, errorMsg = null) {
 // Path Engine — V3 Live Persistent Learning Paths
 // ─────────────────────────────────────────────
 
+export async function createGoal(userId, goal) {
+  if (!userId) return { error: 'user_id required' }
+  if (!goal?.name?.trim?.()) return { error: 'goal.name required' }
+  try {
+    const res = await fetch(`${RENDER_URL}/goal/create`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId, goal }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
 export async function listGoals(userId) {
   try {
     const res = await fetch(`${RENDER_URL}/goal/list`, {
@@ -1058,6 +1073,7 @@ const agent = {
   registerSME,
   getSMEProfile,
   listSMEs,
+  createGoal,
   bookSME,
   // Career Compass family
   runStayAhead,

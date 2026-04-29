@@ -61,6 +61,28 @@ export default function SourcesNav() {
   const [serverStatus, setServerStatus] = useState(null);
   const [statusRefreshing, setStatusRefreshing] = useState(false);
 
+  // Collapsible sections — only one open by default to reduce nav density.
+  // Sections in form-mode (smeMode/resumeMode/predigest open) are auto-forced open below.
+  const [openSections, setOpenSections] = useState({
+    sources: false,        // Connected + Connect More
+    currency: false,       // Currency Watch
+    career: false,         // Career Compass + Stay Ahead + Career Simulator
+    predigest: false,      // Pre-digest a Doc
+    goals: true,           // Goals & Path Engine — the anchor, default open
+    sme: false,            // SME Marketplace
+    resume: false,         // Resume · Service Record
+  });
+
+  const toggleSection = (id) =>
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  // Force-open sections when their input form mode is active
+  const isOpen = (id) =>
+    openSections[id]
+    || (id === "sme" && smeMode === "register")
+    || (id === "resume" && resumeMode != null)
+    || (id === "predigest" && predigestOpen);
+
   async function refreshAgentStatus() {
     setStatusRefreshing(true);
     setBridgeLive(agent.isBridgeConnected());
@@ -492,6 +514,34 @@ export default function SourcesNav() {
     );
   }
 
+  // Inline header pattern for collapsible sections — keeps closures simple
+  const SectionHeader = ({ id, color = "purple", icon, label, badge, accent = false }) => {
+    const opened = isOpen(id);
+    const colorClasses = {
+      purple:  { dot: "bg-purple-500",  text: "text-purple-700",  bg: "from-purple-50/40" },
+      green:   { dot: "bg-green-500",   text: "text-green-700",   bg: "from-green-50/40" },
+      rose:    { dot: "bg-rose-500",    text: "text-rose-700",    bg: "from-rose-50/40" },
+      emerald: { dot: "bg-emerald-500", text: "text-emerald-700", bg: "from-emerald-50/40" },
+      gray:    { dot: "bg-gray-400",    text: "text-gray-600",    bg: "" },
+    }[color] || { dot: "bg-gray-400", text: "text-gray-600", bg: "" };
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSection(id)}
+        className={`w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50/60 transition-colors text-left border-t border-gray-50 ${accent && opened ? `bg-gradient-to-br ${colorClasses.bg} to-transparent` : ""}`}
+      >
+        <span className={`w-1.5 h-1.5 rounded-full ${colorClasses.dot} shrink-0`} />
+        <span className={`text-[10px] font-bold tracking-wider ${colorClasses.text}`}>
+          {icon ? `${icon} ` : ""}{label}
+        </span>
+        {badge != null && (
+          <span className={`ml-auto text-[9px] font-mono ${colorClasses.text} opacity-70`}>{badge}</span>
+        )}
+        <span className={`text-[9px] text-gray-400 transition-transform ${badge != null ? "ml-1" : "ml-auto"} ${opened ? "rotate-90" : ""}`}>▶</span>
+      </button>
+    );
+  };
+
   // Expanded state — full panel
   return (
     <nav className="w-[260px] min-w-[260px] bg-white border-r border-gray-100 flex flex-col overflow-y-auto no-scrollbar">
@@ -549,57 +599,40 @@ export default function SourcesNav() {
         )}
       </div>
 
-      {/* Connected sources */}
-      <div className="px-4 py-4 border-b border-gray-50">
-        <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-2.5">
-          CONNECTED SOURCES · {connectedCount}
-        </p>
-        <div className="flex flex-col gap-1.5">
-          {sources.filter((s) => s.connected).map((source) => (
-            <div
-              key={source.name}
-              className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-            >
-              <div className={`w-7 h-7 rounded-md ${source.color} flex items-center justify-center text-white text-[9px] font-bold shrink-0`}>
-                {source.icon}
+      {/* Sources — connected + available to connect (merged section) */}
+      <SectionHeader id="sources" color="gray" icon="🔗" label="CONTENT SOURCES" badge={`${connectedCount}/${sources.length}`} />
+      {isOpen("sources") && (
+        <div className="px-4 pb-3 pt-2 border-b border-gray-50">
+          <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-1.5">CONNECTED · {connectedCount}</p>
+          <div className="flex flex-col gap-1.5 mb-3">
+            {sources.filter((s) => s.connected).map((source) => (
+              <div key={source.name} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                <div className={`w-6 h-6 rounded-md ${source.color} flex items-center justify-center text-white text-[9px] font-bold shrink-0`}>{source.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-medium text-text-primary truncate">{source.name}</p>
+                  <p className="text-[9px] text-gray-400">{source.items.toLocaleString()} items</p>
+                </div>
+                <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-text-primary truncate">{source.name}</p>
-                <p className="text-[9px] text-gray-400">{source.items.toLocaleString()} items</p>
+            ))}
+          </div>
+          <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-1.5">CONNECT MORE</p>
+          <div className="flex flex-col gap-1.5">
+            {sources.filter((s) => !s.connected).map((source) => (
+              <div key={source.name} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg border border-dashed border-gray-200 hover:border-navy/30 transition-colors cursor-pointer group">
+                <div className="w-6 h-6 rounded-md bg-gray-100 flex items-center justify-center text-gray-400 text-[9px] font-bold shrink-0 group-hover:bg-navy/5 group-hover:text-navy transition-colors">{source.icon}</div>
+                <p className="text-[11px] text-gray-500 group-hover:text-text-primary transition-colors flex-1 truncate">{source.name}</p>
+                <span className="text-[9px] text-navy font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0">+</span>
               </div>
-              <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-
-      {/* Available to connect */}
-      <div className="px-4 py-4">
-        <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-2.5">CONNECT MORE</p>
-        <div className="flex flex-col gap-1.5">
-          {sources.filter((s) => !s.connected).map((source) => (
-            <div
-              key={source.name}
-              className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-dashed border-gray-200 hover:border-navy/30 transition-colors cursor-pointer group"
-            >
-              <div className="w-7 h-7 rounded-md bg-gray-100 flex items-center justify-center text-gray-400 text-[9px] font-bold shrink-0 group-hover:bg-navy/5 group-hover:text-navy transition-colors">
-                {source.icon}
-              </div>
-              <p className="text-[11px] text-gray-500 group-hover:text-text-primary transition-colors flex-1 truncate">{source.name}</p>
-              <span className="text-[9px] text-navy font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                +
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* V3: Currency Watch — full agentic loop demo */}
-      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-purple-50/40 to-transparent">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-          <p className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ CURRENCY WATCH</p>
-        </div>
+      <SectionHeader id="currency" color="purple" icon="⚙" label="CURRENCY WATCH" accent />
+      {isOpen("currency") && (
+      <div className="px-4 pb-3 pt-1 bg-gradient-to-br from-purple-50/40 to-transparent">
         <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
           Re-fetches your tracked sources via Perplexity Computer, classifies changes via Claude, surfaces what's substantive.
         </p>
@@ -677,15 +710,14 @@ export default function SourcesNav() {
           <p className="mt-2 text-[10px] text-red-600">Error: {scanResult.error}</p>
         )}
       </div>
+      )}
 
       {/* V3: Career Compass — second Perplexity Computer use case */}
-      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-purple-50/40 to-transparent">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-          <p className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ CAREER COMPASS</p>
-        </div>
+      <SectionHeader id="career" color="purple" icon="⚙" label="CAREER COMPASS" accent />
+      {isOpen("career") && (
+      <div className="px-4 pb-3 pt-1 bg-gradient-to-br from-purple-50/40 to-transparent">
         <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
-          Scrapes job market + course launches + vendor certs via Perplexity Computer. Ranks signals by relevance to your role.
+          Scrapes job market + course launches + vendor certs via Perplexity Computer. Ranks signals by relevance to your role. Includes Stay Ahead + Career Simulator.
         </p>
         <button
           onClick={handleCareerScan}
@@ -794,13 +826,12 @@ export default function SourcesNav() {
           )}
         </div>
       </div>
+      )}
 
       {/* V3: Pre-digest — third Perplexity Computer use case */}
-      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-purple-50/40 to-transparent">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-          <p className="text-[10px] text-purple-700 font-bold tracking-wider">⚙ PRE-DIGEST A DOC</p>
-        </div>
+      <SectionHeader id="predigest" color="purple" icon="⚙" label="PRE-DIGEST A DOC" accent />
+      {isOpen("predigest") && (
+      <div className="px-4 pb-3 pt-1 bg-gradient-to-br from-purple-50/40 to-transparent">
         <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
           Paste a long doc URL. Perplexity Computer reads it deeply, Claude extracts 5 key concepts.
         </p>
@@ -867,52 +898,36 @@ export default function SourcesNav() {
           <p className="mt-2 text-[10px] text-red-600">Error: {predigestResult.error}</p>
         )}
       </div>
+      )}
 
       {/* V3: Path Engine — Live Persistent Learning Paths */}
-      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-green-50/40 to-transparent">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-          <p className="text-[10px] text-green-700 font-bold tracking-wider">⚡ PATH ENGINE</p>
-        </div>
+      <SectionHeader id="goals" color="green" icon="🎯" label="GOALS & PATHS" accent />
+      {isOpen("goals") && (
+      <div className="px-4 pb-3 pt-1 bg-gradient-to-br from-green-50/40 to-transparent">
         <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
           Multi-goal management. Each goal has a live path that auto-adjusts on session, content, or staleness triggers.
         </p>
-        <div className="space-y-1.5">
-          <button
-            onClick={handleShowGoals}
-            disabled={pathLoading}
-            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
-              pathLoading
-                ? "bg-green-100 text-green-400 cursor-wait"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-          >
-            🎯 Show my goals
-          </button>
-          <button
-            onClick={handleTriggerPathAdjust}
-            disabled={pathLoading}
-            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
-              pathLoading
-                ? "bg-green-100 text-green-400 cursor-wait"
-                : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
-            }`}
-          >
-            ⚡ Simulate session_complete
-          </button>
-        </div>
+        <button
+          onClick={handleShowGoals}
+          disabled={pathLoading}
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+            pathLoading
+              ? "bg-green-100 text-green-400 cursor-wait"
+              : "bg-green-600 text-white hover:bg-green-700"
+          }`}
+        >
+          🎯 Show my goals
+        </button>
         {pathLastAction && (
           <p className="mt-2 text-[10px] text-green-700 italic">{pathLastAction}</p>
         )}
       </div>
+      )}
 
       {/* V3: SME Marketplace V1 */}
-      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-rose-50/40 to-transparent">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-          <p className="text-[10px] text-rose-700 font-bold tracking-wider">🤝 SME MARKETPLACE</p>
-        </div>
-
+      <SectionHeader id="sme" color="rose" icon="🤝" label="SME MARKETPLACE" accent />
+      {isOpen("sme") && (
+      <div className="px-4 pb-3 pt-1 bg-gradient-to-br from-rose-50/40 to-transparent">
         {smeMode === "register" ? (
           <>
             <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">
@@ -1052,14 +1067,12 @@ export default function SourcesNav() {
           <p className="mt-2 text-[10px] text-rose-700 italic">{smeLastAction}</p>
         )}
       </div>
+      )}
 
       {/* V3: Resume Module — living service record + tailored resume */}
-      <div className="px-4 py-3 border-t border-gray-50 bg-gradient-to-br from-emerald-50/40 to-transparent">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <p className="text-[10px] text-emerald-700 font-bold tracking-wider">📋 RESUME · SERVICE RECORD</p>
-          <span className="ml-auto text-[9px] font-mono text-emerald-700">{resumeJournalCount}</span>
-        </div>
+      <SectionHeader id="resume" color="emerald" icon="📋" label="SERVICE RECORD" badge={resumeJournalCount} accent />
+      {isOpen("resume") && (
+      <div className="px-4 pb-3 pt-1 bg-gradient-to-br from-emerald-50/40 to-transparent">
         <p className="text-[10px] text-gray-500 mb-2.5 leading-relaxed">
           Your living service record. Tell Peraasan what you did. When a job posting lands, get a tailored resume drawn from your real entries.
         </p>
@@ -1165,6 +1178,7 @@ export default function SourcesNav() {
           <p className="mt-2 text-[10px] text-emerald-700 italic">{resumeStatus}</p>
         )}
       </div>
+      )}
 
       {/* Seed demo content — dev only */}
       {isDev && (

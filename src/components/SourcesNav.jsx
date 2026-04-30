@@ -15,7 +15,24 @@ const sources = [
   { name: "Slack (Learning channels)", icon: "S", color: "bg-purple-500", connected: false, items: 0 },
 ];
 
-export default function SourcesNav() {
+// Section → module mapping for module-aware filtering (Phase 1 IA refactor).
+// When `module` prop is set, only sections belonging to that module render.
+// `kudil` (home) shows everything — preserving today's all-in-one experience.
+const SECTION_MODULE = {
+  sources:   "library",
+  currency:  "stay-ahead",
+  career:    "stay-ahead",
+  predigest: "stay-ahead",
+  goals:     "paths",
+  sme:       "marketplace",
+  resume:    "resume",
+};
+
+export default function SourcesNav({ module: activeModule = "kudil" } = {}) {
+  // Module-aware filter — true if this section belongs to the active module
+  // (or we're on Kudil, which shows everything).
+  const visibleInModule = (sectionId) =>
+    activeModule === "kudil" || SECTION_MODULE[sectionId] === activeModule;
   const [open, setOpen] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [seedDone, setSeedDone] = useState(false);
@@ -76,12 +93,15 @@ export default function SourcesNav() {
   const toggleSection = (id) =>
     setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  // Force-open sections when their input form mode is active
+  // Force-open sections when their input form mode is active.
+  // Also hidden when the section's module isn't the active module.
   const isOpen = (id) =>
-    openSections[id]
-    || (id === "sme" && smeMode === "register")
-    || (id === "resume" && resumeMode != null)
-    || (id === "predigest" && predigestOpen);
+    visibleInModule(id) && (
+      openSections[id]
+      || (id === "sme" && smeMode === "register")
+      || (id === "resume" && resumeMode != null)
+      || (id === "predigest" && predigestOpen)
+    );
 
   async function refreshAgentStatus() {
     setStatusRefreshing(true);
@@ -516,6 +536,7 @@ export default function SourcesNav() {
 
   // Inline header pattern for collapsible sections — keeps closures simple
   const SectionHeader = ({ id, color = "purple", icon, label, badge, accent = false }) => {
+    if (!visibleInModule(id)) return null;
     const opened = isOpen(id);
     const colorClasses = {
       purple:  { dot: "bg-purple-500",  text: "text-purple-700",  bg: "from-purple-50/40" },

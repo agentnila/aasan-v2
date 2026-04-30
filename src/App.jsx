@@ -1,12 +1,26 @@
 import { useState, useEffect } from 'react'
 import { SignedIn, SignedOut, SignIn, useUser } from '@clerk/clerk-react'
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
 import './index.css'
-import SourcesNav from './components/SourcesNav'
-import ChatPanel from './components/ChatPanel'
-import ContextPanel from './components/ContextPanel'
+import ModuleRail from './components/ModuleRail'
+import { ModuleLayout } from './components/ModuleCanvas'
+import LibraryCanvas from './components/canvases/LibraryCanvas'
+import PathsCanvas from './components/canvases/PathsCanvas'
+import StayAheadCanvas from './components/canvases/StayAheadCanvas'
+import ResumeCanvas from './components/canvases/ResumeCanvas'
+import MarketplaceCanvas from './components/canvases/MarketplaceCanvas'
 import { loadContext } from './services/api'
 
-function AasanApp() {
+/**
+ * Module-first IA (Phase 1):
+ *   ModuleRail (60px) | filtered SourcesNav (module pane) | canvas | ContextPanel (320px)
+ *
+ * Kudil (/) preserves today's chat-as-canvas experience. Other modules show
+ * stub canvases (Phase 2 fills in real dashboards) with chat available as a
+ * slide-over from the right.
+ */
+
+function ModuleShell({ module, children }) {
   const { user } = useUser()
   const [contextData, setContextData] = useState({
     type: 'idle',
@@ -15,7 +29,6 @@ function AasanApp() {
   const [backendContext, setBackendContext] = useState(null)
   const [contextLoading, setContextLoading] = useState(true)
 
-  // Load real context from Render backend on mount
   useEffect(() => {
     if (!user?.id) return
     setContextLoading(true)
@@ -32,20 +45,35 @@ function AasanApp() {
 
   return (
     <div className="flex h-screen w-screen bg-bg">
-      <SourcesNav />
-      <ChatPanel
-        onContextChange={setContextData}
-        userName={user?.firstName || 'there'}
-        context={backendContext}
-        userId={user?.id}
-      />
-      <ContextPanel
-        data={contextData}
-        user={user}
-        context={backendContext}
+      <ModuleRail />
+      <ModuleLayout
+        module={module}
+        contextData={contextData}
+        setContextData={setContextData}
+        backendContext={backendContext}
         contextLoading={contextLoading}
-      />
+      >
+        {children}
+      </ModuleLayout>
     </div>
+  )
+}
+
+function AasanApp() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<ModuleShell module="kudil" />} />
+        <Route path="/kudil" element={<ModuleShell module="kudil" />} />
+        <Route path="/library" element={<ModuleShell module="library"><LibraryCanvas /></ModuleShell>} />
+        <Route path="/paths" element={<ModuleShell module="paths"><PathsCanvas /></ModuleShell>} />
+        <Route path="/stay-ahead" element={<ModuleShell module="stay-ahead"><StayAheadCanvas /></ModuleShell>} />
+        <Route path="/resume" element={<ModuleShell module="resume"><ResumeCanvas /></ModuleShell>} />
+        <Route path="/marketplace" element={<ModuleShell module="marketplace"><MarketplaceCanvas /></ModuleShell>} />
+        {/* Catch-all → Kudil */}
+        <Route path="*" element={<ModuleShell module="kudil" />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
@@ -65,7 +93,7 @@ export default function App() {
               </svg>
             </div>
             <h1 className="font-serif text-2xl font-bold text-navy mb-1">Aasan</h1>
-            <p className="text-[11px] text-gray-400 tracking-[0.15em] uppercase mb-8">Your Personal University</p>
+            <p className="text-[11px] text-gray-400 tracking-[0.15em] uppercase mb-8">Your Career Operating System</p>
             <SignIn
               appearance={{
                 elements: {

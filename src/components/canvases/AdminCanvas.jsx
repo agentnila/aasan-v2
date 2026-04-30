@@ -136,7 +136,7 @@ export default function AdminCanvas() {
         <Tab active={tab === "onboarding"}  onClick={() => setTab("onboarding")} label="🎓 Onboarding" />
         <Tab active={tab === "audit"}       onClick={() => setTab("audit")}      label="📋 Audit log" />
         <Tab active={tab === "modules"}     onClick={() => setTab("modules")}    label="📦 Modules"  badge="soon" />
-        <Tab active={tab === "sso"}         onClick={() => setTab("sso")}        label="🔐 SSO"       badge="soon" />
+        <Tab active={tab === "sso"}         onClick={() => setTab("sso")}        label="🔐 SSO · SCIM" />
         <Tab active={tab === "branding"}    onClick={() => setTab("branding")}   label="🎨 Branding"  badge="soon" />
         <Tab active={tab === "billing"}     onClick={() => setTab("billing")}    label="💳 Billing"   badge="soon" />
       </div>
@@ -323,7 +323,8 @@ export default function AdminCanvas() {
       {tab === "heatmap" && <SkillHeatmapTab actorId={actorId} />}
       {tab === "onboarding" && <OnboardingTab actorId={actorId} />}
       {tab === "audit" && <AuditLogTab actorId={actorId} />}
-      {tab !== "people" && tab !== "audit" && tab !== "reports" && tab !== "heatmap" && tab !== "onboarding" && <SoonStub tab={tab} />}
+      {tab === "sso" && <SsoScimTab actorId={actorId} />}
+      {tab !== "people" && tab !== "audit" && tab !== "reports" && tab !== "heatmap" && tab !== "onboarding" && tab !== "sso" && <SoonStub tab={tab} />}
     </div>
   );
 }
@@ -1109,4 +1110,245 @@ function fmtRelativeDate(iso) {
     if (diffDays < 7) return `${diffDays}d ago`;
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   } catch { return iso; }
+}
+
+// ──────────────────────────────────────────────────────────────
+// SSO · SCIM TAB — Phase G of Internal Pilot Pack
+// ──────────────────────────────────────────────────────────────
+
+const SCIM_BASE = "https://aasan-backend.onrender.com/scim/v2";
+
+function SsoScimTab({ actorId }) {
+  const [tokens, setTokens] = useState([]);
+  const [syncLog, setSyncLog] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [issuing, setIssuing] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [justIssued, setJustIssued] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(null);
+
+  async function load() {
+    setLoading(true);
+    const [t, s] = await Promise.all([
+      agent.adminScimListTokens(actorId),
+      agent.adminScimSyncLog(actorId, { limit: 50 }),
+    ]);
+    setTokens(t?.tokens || []);
+    setSyncLog(s?.entries || []);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [actorId]);
+
+  async function issueToken() {
+    if (issuing) return;
+    setIssuing(true);
+    const r = await agent.adminScimIssueToken(actorId, newLabel || "SCIM token");
+    setIssuing(false);
+    if (r?.error) { alert(r.error); return; }
+    if (r?.token) setJustIssued(r);
+    setNewLabel("");
+    await load();
+  }
+
+  async function revokeToken(preview) {
+    if (!confirm(`Revoke token ${preview}? Any IdP using it will stop working.`)) return;
+    setBusy(preview);
+    await agent.adminScimRevokeToken(actorId, preview);
+    setBusy(null);
+    await load();
+  }
+
+  function copyToken(t) {
+    navigator.clipboard?.writeText(t);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  // Group sync log by action
+  const syncStats = useMemo(() => {
+    const by = {};
+    for (const e of syncLog) by[e.action] = (by[e.action] || 0) + 1;
+    return by;
+  }, [syncLog]);
+
+  return (
+    <div className="space-y-4">
+      {/* CONNECTION DETAILS */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-[14px] font-bold text-text-primary">SCIM v2 endpoint</h2>
+            <p className="text-[11px] text-gray-500 mt-0.5">Wire your IdP (Okta · Azure AD · OneLogin) here. Provisions users into Aasan automatically — no more CSV uploads.</p>
+          </div>
+          <span className="text-[10px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5 font-semibold">● Live</span>
+        </div>
+        <div className="space-y-2">
+          <ConnField label="Base URL" value={SCIM_BASE} mono />
+          <ConnField label="Auth method" value="OAuth Bearer Token" />
+          <ConnField label="Supported ops" value="POST · GET · PUT · PATCH · DELETE · filter · pagination" />
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3">
+          <p className="text-[10px] font-semibold text-amber-700 tracking-wider mb-0.5">⚡ OKTA SETUP</p>
+          <p className="text-[11px] text-gray-700 leading-relaxed">
+            In Okta → Applications → Aasan → Provisioning → API Integration. Paste the Base URL above. For the Bearer token, issue a new one below — Okta will only let you paste it once.
+          </p>
+        </div>
+      </section>
+
+      {/* TOKEN MANAGEMENT */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+        <h3 className="text-[12px] font-bold text-text-primary mb-2">🔑 Bearer tokens · {tokens.length}</h3>
+
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder="Label (e.g. 'Okta — Production')"
+            className="flex-1 px-2 py-1.5 rounded-md border border-gray-200 text-[11px]"
+          />
+          <button
+            onClick={issueToken}
+            disabled={issuing}
+            className="text-[11px] font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:bg-gray-300 rounded-md px-3 py-1.5"
+          >
+            {issuing ? "Issuing…" : "+ Issue token"}
+          </button>
+        </div>
+
+        {justIssued && (
+          <div className="bg-emerald-50 border-2 border-emerald-300 rounded-lg p-3 mb-3">
+            <p className="text-[10px] font-semibold text-emerald-700 tracking-wider mb-1">⚡ COPY THIS TOKEN — IT WILL NOT BE SHOWN AGAIN</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-[10px] font-mono bg-white border border-emerald-200 rounded px-2 py-1.5 break-all">{justIssued.token}</code>
+              <button
+                onClick={() => copyToken(justIssued.token)}
+                className="text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-md px-3 py-1.5 shrink-0"
+              >
+                {copied ? "✓ Copied" : "Copy"}
+              </button>
+            </div>
+            <button
+              onClick={() => setJustIssued(null)}
+              className="text-[10px] text-gray-500 hover:text-gray-700 mt-2"
+            >
+              I've saved it · dismiss
+            </button>
+          </div>
+        )}
+
+        {loading && <p className="text-[11px] text-gray-400">Loading tokens…</p>}
+        {!loading && tokens.length === 0 && (
+          <p className="text-[11px] text-gray-400 italic px-2 py-4">No tokens yet. Issue one above and paste it into Okta's SCIM settings.</p>
+        )}
+        <div className="space-y-1">
+          {tokens.map((t, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2 border border-gray-100 rounded-lg">
+              <code className="text-[10px] font-mono text-gray-500 shrink-0">{t.preview}</code>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-text-primary truncate">{t.label}</p>
+                <p className="text-[9px] text-gray-400">
+                  Issued {fmtRelativeDate(t.issued_at)} by {t.issued_by} · {t.use_count} call{t.use_count === 1 ? "" : "s"}
+                  {t.last_used_at && ` · last used ${fmtRelativeDate(t.last_used_at)}`}
+                </p>
+              </div>
+              <button
+                onClick={() => revokeToken(t.preview)}
+                disabled={busy === t.preview}
+                className="text-[10px] text-red-600 hover:text-red-800 font-semibold shrink-0"
+              >
+                {busy === t.preview ? "…" : "Revoke"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* FIELD MAPPING */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+        <h3 className="text-[12px] font-bold text-text-primary mb-2">🔁 Field mapping</h3>
+        <p className="text-[11px] text-gray-500 mb-3">How SCIM attributes from your IdP land on the Aasan user.</p>
+        <div className="space-y-1">
+          {[
+            ["userName", "email", "Required. Used as the unique key."],
+            ["externalId", "scim_external_id", "IdP's stable ID — survives email changes."],
+            ["name.formatted", "name", "Display name."],
+            ["active", "is_active", "Push deactivation here to suspend access."],
+            ["title", "job_role", "If present, auto-applies the matching onboarding template."],
+            ["userType", "role", "Optional. Maps to learner/manager/ld_admin/etc."],
+            ["enterprise:department", "department", "For org chart + skill heatmap."],
+            ["enterprise:manager.value", "manager_user_id", "Resolved by user_id, email, or externalId."],
+          ].map(([scim, aasan, note], i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 text-[11px] py-1.5 border-b border-gray-50 last:border-0">
+              <code className="col-span-3 font-mono text-rose-700 truncate">{scim}</code>
+              <span className="col-span-1 text-gray-300 text-center">→</span>
+              <code className="col-span-3 font-mono text-emerald-700 truncate">{aasan}</code>
+              <span className="col-span-5 text-gray-500 text-[10px]">{note}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* SYNC LOG */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[12px] font-bold text-text-primary">📋 Sync log · {syncLog.length}</h3>
+          <button
+            onClick={load}
+            className="text-[10px] text-rose-600 hover:text-rose-800 font-semibold"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+        {Object.keys(syncStats).length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {Object.entries(syncStats).map(([action, n]) => (
+              <span key={action} className="text-[10px] bg-gray-100 text-gray-700 rounded-full px-2 py-0.5">
+                {action}: <span className="font-semibold">{n}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {syncLog.length === 0 ? (
+          <p className="text-[11px] text-gray-400 italic px-2 py-4">No SCIM activity yet. Once Okta connects, every push will land here.</p>
+        ) : (
+          <div className="space-y-1 max-h-72 overflow-y-auto">
+            {syncLog.map((e, i) => (
+              <div key={i} className="flex items-center gap-3 text-[11px] py-1 border-b border-gray-50 last:border-0">
+                <span className={`text-[9px] rounded-full px-1.5 py-0.5 font-semibold w-16 text-center shrink-0 ${
+                  e.action === "create" ? "bg-emerald-50 text-emerald-700"
+                  : e.action === "delete" ? "bg-red-50 text-red-700"
+                  : e.action === "patch" ? "bg-blue-50 text-blue-700"
+                  : "bg-gray-100 text-gray-600"
+                }`}>
+                  {e.action}
+                </span>
+                <code className="text-[10px] font-mono text-text-primary truncate flex-1">{e.target_id}</code>
+                <span className="text-[9px] text-gray-400 shrink-0">{fmtAuditTime(e.ts)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ConnField({ label, value, mono = false }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard?.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <div className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-100 rounded-md">
+      <span className="text-[9px] font-semibold text-gray-500 tracking-wider w-24 shrink-0">{label.toUpperCase()}</span>
+      <code className={`flex-1 text-[11px] truncate ${mono ? "font-mono" : ""} text-text-primary`}>{value}</code>
+      <button onClick={copy} className="text-[10px] text-rose-600 hover:text-rose-800 shrink-0">
+        {copied ? "✓" : "Copy"}
+      </button>
+    </div>
+  );
 }

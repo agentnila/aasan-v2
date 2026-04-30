@@ -808,6 +808,57 @@ export async function adminUpdateUser(actorUserId, targetUserId, fields) {
 }
 
 // ─────────────────────────────────────────────
+// SCIM ADMIN — Internal Pilot Pack G
+// Token issuance + sync log surfacing.
+// SCIM endpoints themselves (/scim/v2/...) use Bearer token auth and are
+// called by the IdP, not the browser — so no helpers needed for those.
+// ─────────────────────────────────────────────
+
+export async function adminScimIssueToken(actorUserId, label = '') {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/scim/issue_token`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ label }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function adminScimListTokens(actorUserId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/scim/list_tokens`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({}),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, tokens: [] } }
+}
+
+export async function adminScimRevokeToken(actorUserId, preview) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/scim/revoke_token`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ preview }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function adminScimSyncLog(actorUserId, { limit = 50 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/scim/sync_log`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ limit }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, entries: [] } }
+}
+
+// ─────────────────────────────────────────────
 // GIGS MODULE — Internal Pilot Pack F.5
 // Cross-team marketplace for short-form internal work
 // ─────────────────────────────────────────────
@@ -1627,6 +1678,11 @@ const agent = {
   gigsMyClaims,
   gigsPoints,
   gigsLeaderboard,
+  // SCIM admin
+  adminScimIssueToken,
+  adminScimListTokens,
+  adminScimRevokeToken,
+  adminScimSyncLog,
 }
 
 export default agent

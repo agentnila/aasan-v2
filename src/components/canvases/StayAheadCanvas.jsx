@@ -26,6 +26,9 @@ export default function StayAheadCanvas() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(null); // 'scan' | 'currency' | 'career' | 'scenario' | null
+  const [predigestUrl, setPredigestUrl] = useState("");
+  const [predigesting, setPredigesting] = useState(false);
+  const [predigestResult, setPredigestResult] = useState(null);
 
   async function loadStayAhead() {
     setLoading(true);
@@ -232,7 +235,64 @@ export default function StayAheadCanvas() {
           <ToolButton label="⚙ Currency Watch" hint="What's gone stale in your skills" busy={running === "currency"} onClick={() => dispatchAction("currency")} />
           <ToolButton label="🔮 Scenario Simulator" hint="Stay vs pivot vs stretch — projected" busy={running === "scenario"} onClick={() => dispatchAction("scenario")} />
         </div>
-        <p className="text-[10px] text-gray-400 italic mt-2">Results post into Peraasan chat (open via the button at the bottom right).</p>
+        <p className="text-[10px] text-gray-400 italic mt-2">Results post into Peraasan chat (⌘K → Ask Peraasan).</p>
+      </section>
+
+      {/* Pre-digest a doc — relocated from legacy left sidebar */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+        <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-1">⚙ PRE-DIGEST A DOC</p>
+        <p className="text-[11px] text-gray-500 mb-3">Paste a long URL. Perplexity Computer reads it deeply, Claude extracts a 5-concept structured digest with TL;DR + suggested next step.</p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!predigestUrl.trim() || predigesting) return;
+            setPredigesting(true);
+            setPredigestResult(null);
+            const r = await agent.predigestDoc({ url: predigestUrl.trim() });
+            setPredigestResult(r);
+            setPredigesting(false);
+          }}
+          className="flex items-center gap-2"
+        >
+          <input
+            type="url"
+            value={predigestUrl}
+            onChange={(e) => setPredigestUrl(e.target.value)}
+            placeholder="https://…"
+            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-purple-400"
+          />
+          <button
+            type="submit"
+            disabled={predigesting || !predigestUrl.trim()}
+            className={`text-[11px] font-semibold rounded-md px-3 py-2 transition-colors ${
+              predigesting || !predigestUrl.trim()
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-purple-600 text-white hover:bg-purple-700"
+            }`}
+          >
+            {predigesting ? "Reading…" : "Pre-digest"}
+          </button>
+        </form>
+        {predigestResult && !predigestResult.error && (
+          <div className="mt-3 bg-purple-50/60 border border-purple-200 rounded-lg p-3 text-[11px]">
+            <p className="font-semibold text-purple-700 mb-1">{predigestResult.title}</p>
+            <p className="text-gray-700 mb-2 italic">{predigestResult.tldr}</p>
+            <div className="space-y-1">
+              {(predigestResult.key_concepts || []).map((kc, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="text-purple-700 font-bold">{i + 1}.</span>
+                  <div>
+                    <span className="font-semibold text-text-primary">{kc.name}</span>
+                    <span className="text-gray-600"> — {kc.body}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {predigestResult.suggested_next_step && (
+              <p className="mt-2 text-[10px] text-purple-600 italic">→ {predigestResult.suggested_next_step}</p>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

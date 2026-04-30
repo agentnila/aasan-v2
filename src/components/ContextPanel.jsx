@@ -136,7 +136,7 @@ function formatBlockTime(startIso, endIso) {
   } catch { return startIso }
 }
 
-export default function ContextPanel({ data, context, contextLoading }) {
+export default function ContextPanel({ data, context, contextLoading, embedded }) {
   const { user } = useUser()
   const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Employee'
   const email = user?.primaryEmailAddress?.emailAddress || ''
@@ -177,24 +177,31 @@ export default function ContextPanel({ data, context, contextLoading }) {
   // Goal from localStorage (set during onboarding)
   const savedGoal = getSavedGoal()
 
+  const Wrapper = embedded ? 'div' : 'aside';
+  const wrapperClass = embedded
+    ? 'flex flex-col overflow-y-auto no-scrollbar'
+    : 'w-[320px] min-w-[320px] bg-white border-l border-gray-100 flex flex-col overflow-y-auto no-scrollbar';
+
   return (
-    <aside className="w-[320px] min-w-[320px] bg-white border-l border-gray-100 flex flex-col overflow-y-auto no-scrollbar">
-      {/* Header — Profile with Clerk UserButton */}
-      <div className="px-5 py-4 border-b border-gray-50">
-        <div className="flex items-center gap-2.5">
-          <UserButton
-            appearance={{
-              elements: { avatarBox: 'w-9 h-9' }
-            }}
-            userProfileMode="modal"
-            afterSignOutUrl="/"
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-semibold text-text-primary">{displayName}</p>
-            <p className="text-[10px] text-gray-400 truncate">{email}</p>
+    <Wrapper className={wrapperClass}>
+      {/* Header — Profile with Clerk UserButton (hidden when embedded; rail has avatar) */}
+      {!embedded && (
+        <div className="px-5 py-4 border-b border-gray-50">
+          <div className="flex items-center gap-2.5">
+            <UserButton
+              appearance={{
+                elements: { avatarBox: 'w-9 h-9' }
+              }}
+              userProfileMode="modal"
+              afterSignOutUrl="/"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-text-primary">{displayName}</p>
+              <p className="text-[10px] text-gray-400 truncate">{email}</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Goal */}
       <div className="px-5 py-4 border-b border-gray-50">
@@ -349,7 +356,7 @@ export default function ContextPanel({ data, context, contextLoading }) {
           ))}
         </div>
       </div>
-    </aside>
+    </Wrapper>
   );
 }
 

@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
 import './index.css'
 import ModuleRail from './components/ModuleRail'
 import { ModuleLayout } from './components/ModuleCanvas'
+import KudilCanvas from './components/canvases/KudilCanvas'
 import LibraryCanvas from './components/canvases/LibraryCanvas'
 import PathsCanvas from './components/canvases/PathsCanvas'
 import StayAheadCanvas from './components/canvases/StayAheadCanvas'
@@ -14,12 +15,12 @@ import AdminCanvas from './components/canvases/AdminCanvas'
 import { loadContext } from './services/api'
 
 /**
- * Module-first IA (Phase 1):
- *   ModuleRail (60px) | filtered SourcesNav (module pane) | canvas | ContextPanel (320px)
+ * Module-first IA · Phase H (canvas-first redesign):
+ *   ModuleRail (48px) | full-bleed canvas | slide-out ContextPanel | floating ⌘K CommandBar
  *
- * Kudil (/) preserves today's chat-as-canvas experience. Other modules show
- * stub canvases (Phase 2 fills in real dashboards) with chat available as a
- * slide-over from the right.
+ * Kudil (/) renders KudilCanvas — a real landing page (greeting · today · 6-tile
+ * module grid · recent dispatches). Chat moved into the universal slide-over
+ * triggered by "Ask Peraasan" in the CommandBar. The legacy left SourcesNav is gone.
  */
 
 function ModuleShell({ module, children }) {
@@ -65,8 +66,8 @@ function AasanApp() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<ModuleShell module="kudil" />} />
-        <Route path="/kudil" element={<ModuleShell module="kudil" />} />
+        <Route path="/" element={<ModuleShell module="kudil"><KudilCanvas /></ModuleShell>} />
+        <Route path="/kudil" element={<ModuleShell module="kudil"><KudilCanvas /></ModuleShell>} />
         <Route path="/library" element={<ModuleShell module="library"><LibraryCanvas /></ModuleShell>} />
         <Route path="/paths" element={<ModuleShell module="paths"><PathsCanvas /></ModuleShell>} />
         <Route path="/stay-ahead" element={<ModuleShell module="stay-ahead"><StayAheadCanvas /></ModuleShell>} />
@@ -75,7 +76,7 @@ function AasanApp() {
         <Route path="/team" element={<ModuleShell module="team"><TeamCanvas /></ModuleShell>} />
         <Route path="/admin" element={<ModuleShell module="admin"><AdminCanvas /></ModuleShell>} />
         {/* Catch-all → Kudil */}
-        <Route path="*" element={<ModuleShell module="kudil" />} />
+        <Route path="*" element={<ModuleShell module="kudil"><KudilCanvas /></ModuleShell>} />
       </Routes>
     </BrowserRouter>
   )

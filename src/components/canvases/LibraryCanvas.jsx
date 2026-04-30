@@ -190,6 +190,33 @@ export default function LibraryCanvas() {
         <p className="text-[10px] text-gray-400 italic mt-3">
           Confluence, Slack, Coursera, LinkedIn Learning, internal LMS connectors ship in Phase D — same DWD pattern as Drive.
         </p>
+
+        {/* Connect more — what isn't yet connected */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-2">CONNECT MORE</p>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { name: "Coursera", icon: "C", color: "bg-blue-500" },
+              { name: "LinkedIn Learning", icon: "in", color: "bg-blue-700" },
+              { name: "Confluence", icon: "C", color: "bg-blue-400" },
+              { name: "YouTube", icon: "▶", color: "bg-red-500" },
+              { name: "Notion", icon: "N", color: "bg-gray-800" },
+              { name: "SharePoint", icon: "S", color: "bg-teal-600" },
+              { name: "Slack (Learning channels)", icon: "S", color: "bg-purple-500" },
+              { name: "Internal LMS", icon: "L", color: "bg-navy" },
+            ].map((s) => (
+              <button
+                key={s.name}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-dashed border-gray-200 hover:border-navy/40 hover:bg-navy/5 transition-colors text-left group"
+                title={`Connect ${s.name}`}
+              >
+                <span className={`w-6 h-6 rounded ${s.color} text-white text-[9px] font-bold flex items-center justify-center shrink-0`}>{s.icon}</span>
+                <span className="text-[11px] text-gray-600 truncate flex-1">{s.name}</span>
+                <span className="text-[10px] text-navy opacity-0 group-hover:opacity-100">+</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* Recently indexed */}

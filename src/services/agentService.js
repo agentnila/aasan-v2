@@ -685,6 +685,39 @@ export async function adminImportUsersCsv(actorUserId, csvText) {
   } catch (err) { return { error: err.message } }
 }
 
+export async function adminOnboardingTemplates(actorUserId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/onboarding/templates`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({}),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, templates: [] } }
+}
+
+export async function adminOnboardingTemplateGet(actorUserId, slug) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/onboarding/templates/get`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ slug }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function adminOnboardingApply(actorUserId, userId, jobRole) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/onboarding/apply`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ user_id: userId, job_role: jobRole }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
 export async function adminSkillHeatmap(actorUserId, { departmentsFilter } = {}) {
   try {
     const res = await fetch(`${RENDER_URL}/admin/skill_heatmap`, {
@@ -1429,6 +1462,9 @@ const agent = {
   adminRunReport,
   adminExportReportCsv,
   adminSkillHeatmap,
+  adminOnboardingTemplates,
+  adminOnboardingTemplateGet,
+  adminOnboardingApply,
   registerSME,
   getSMEProfile,
   listSMEs,

@@ -130,14 +130,15 @@ export default function AdminCanvas() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-gray-200">
-        <Tab active={tab === "people"}   onClick={() => setTab("people")}   label="👥 People"   count={users?.total} />
-        <Tab active={tab === "reports"}  onClick={() => setTab("reports")}  label="📊 Reports" />
-        <Tab active={tab === "heatmap"}  onClick={() => setTab("heatmap")}  label="🌡 Skill heatmap" />
-        <Tab active={tab === "audit"}    onClick={() => setTab("audit")}    label="📋 Audit log" />
-        <Tab active={tab === "modules"}  onClick={() => setTab("modules")}  label="📦 Modules"  badge="soon" />
-        <Tab active={tab === "sso"}      onClick={() => setTab("sso")}      label="🔐 SSO"       badge="soon" />
-        <Tab active={tab === "branding"} onClick={() => setTab("branding")} label="🎨 Branding"  badge="soon" />
-        <Tab active={tab === "billing"}  onClick={() => setTab("billing")}  label="💳 Billing"   badge="soon" />
+        <Tab active={tab === "people"}      onClick={() => setTab("people")}     label="👥 People"   count={users?.total} />
+        <Tab active={tab === "reports"}     onClick={() => setTab("reports")}    label="📊 Reports" />
+        <Tab active={tab === "heatmap"}     onClick={() => setTab("heatmap")}    label="🌡 Skill heatmap" />
+        <Tab active={tab === "onboarding"}  onClick={() => setTab("onboarding")} label="🎓 Onboarding" />
+        <Tab active={tab === "audit"}       onClick={() => setTab("audit")}      label="📋 Audit log" />
+        <Tab active={tab === "modules"}     onClick={() => setTab("modules")}    label="📦 Modules"  badge="soon" />
+        <Tab active={tab === "sso"}         onClick={() => setTab("sso")}        label="🔐 SSO"       badge="soon" />
+        <Tab active={tab === "branding"}    onClick={() => setTab("branding")}   label="🎨 Branding"  badge="soon" />
+        <Tab active={tab === "billing"}     onClick={() => setTab("billing")}    label="💳 Billing"   badge="soon" />
       </div>
 
       {tab === "people" && (
@@ -320,8 +321,9 @@ export default function AdminCanvas() {
 
       {tab === "reports" && <ReportsTab actorId={actorId} />}
       {tab === "heatmap" && <SkillHeatmapTab actorId={actorId} />}
+      {tab === "onboarding" && <OnboardingTab actorId={actorId} />}
       {tab === "audit" && <AuditLogTab actorId={actorId} />}
-      {tab !== "people" && tab !== "audit" && tab !== "reports" && tab !== "heatmap" && <SoonStub tab={tab} />}
+      {tab !== "people" && tab !== "audit" && tab !== "reports" && tab !== "heatmap" && tab !== "onboarding" && <SoonStub tab={tab} />}
     </div>
   );
 }
@@ -370,6 +372,189 @@ function SoonStub({ tab }) {
     </div>
   );
 }
+
+function OnboardingTab({ actorId }) {
+  const [list, setList] = useState(null);
+  const [activeSlug, setActiveSlug] = useState(null);
+  const [active, setActive] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
+  const [applyUserId, setApplyUserId] = useState("");
+  const [applyJobRole, setApplyJobRole] = useState("");
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState(null);
+
+  useEffect(() => {
+    agent.adminOnboardingTemplates(actorId).then((data) => {
+      setList(data);
+      if (data?.templates?.length && !activeSlug) {
+        setActiveSlug(data.templates[0].slug);
+      }
+    });
+    agent.adminListUsers(actorId, { limit: 200 }).then((u) => setAllUsers(u?.users || []));
+    // eslint-disable-next-line
+  }, []);
+
+  useEffect(() => {
+    if (!activeSlug) return;
+    agent.adminOnboardingTemplateGet(actorId, activeSlug).then(setActive);
+  }, [activeSlug, actorId]);
+
+  async function handleApply() {
+    if (!applyUserId || !applyJobRole) return;
+    setApplying(true);
+    setApplyResult(null);
+    const result = await agent.adminOnboardingApply(actorId, applyUserId, applyJobRole);
+    setApplyResult(result);
+    setApplying(false);
+  }
+
+  const templates = list?.templates || [];
+  const tpl = active?.template;
+
+  return (
+    <>
+      {/* Stats */}
+      <section className="grid grid-cols-3 gap-3">
+        <Stat label="Templates" value={list?.count ?? "—"} />
+        <Stat label="Users" value={allUsers.length} />
+        <Stat label="Auto-applied on import" value="✓ enabled" tone="emerald" />
+      </section>
+
+      <p className="text-[12px] text-gray-600 leading-relaxed bg-amber-50/40 border border-amber-100 rounded-lg p-3">
+        💡 When a CSV import creates a NEW user with a <code className="text-[11px] bg-white px-1 rounded">job_role</code> column value matching one of these templates, the corresponding goal + path steps are auto-created via Path Engine. <span className="font-semibold">Idempotent</span> — re-running won't duplicate.
+      </p>
+
+      <div className="grid grid-cols-3 gap-4">
+        {/* Template list */}
+        <section className="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
+          <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-2 px-1">TEMPLATES</p>
+          <div className="space-y-1">
+            {templates.map((t) => {
+              const isActive = activeSlug === t.slug;
+              return (
+                <button
+                  key={t.slug}
+                  onClick={() => setActiveSlug(t.slug)}
+                  className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors ${
+                    isActive ? "bg-rose-50 border border-rose-300" : "border border-transparent hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[12px] font-semibold text-text-primary">{t.label}</span>
+                    {t.overridden && <span className="text-[8px] uppercase tracking-wider bg-amber-100 text-amber-700 rounded px-1 py-0.5">CUSTOM</span>}
+                  </div>
+                  <p className="text-[10px] text-gray-500 truncate">{t.description}</p>
+                  <p className="text-[9px] text-gray-400 mt-0.5 font-mono">{t.slug} · {t.step_count} steps · {t.milestones} milestones</p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Template detail (read-only V1) */}
+        <section className="col-span-2 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+          {!tpl && <p className="text-[12px] text-gray-400">Select a template…</p>}
+          {tpl && (
+            <>
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-[14px] font-bold text-text-primary">{tpl.label}</h2>
+                <span className="text-[9px] font-mono text-gray-400">{active.slug}</span>
+              </div>
+              {tpl.description && <p className="text-[11px] text-gray-600 mb-3 leading-relaxed">{tpl.description}</p>}
+
+              <div className="bg-gray-50/60 border border-gray-100 rounded-lg p-3 mb-3">
+                <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1">🎯 GOAL THIS CREATES</p>
+                <p className="text-[12px] font-semibold text-text-primary">{tpl.goal.name}</p>
+                <p className="text-[11px] text-gray-600 mt-0.5">📌 {tpl.goal.objective}</p>
+                <p className="text-[11px] text-gray-600 mt-0.5">📅 {tpl.goal.timeline} · ✅ {tpl.goal.success_criteria}</p>
+              </div>
+
+              <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1.5">📋 PATH STEPS · {tpl.steps.length}</p>
+              <div className="space-y-1 mb-3 max-h-64 overflow-y-auto">
+                {tpl.steps.map((s, i) => (
+                  <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded border border-gray-100">
+                    <span className="text-[10px] font-mono text-gray-400 shrink-0">{i + 1}</span>
+                    <span className="text-[14px] shrink-0">{({content:"📄",exercise:"💻",reference:"📚",review:"✅",refresher:"🔄"}[s.step_type] || "📄")}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-text-primary">{s.title}</p>
+                      {s.inserted_reason && <p className="text-[9px] text-gray-500 italic">{s.inserted_reason}</p>}
+                    </div>
+                    <span className="text-[9px] text-gray-400 shrink-0">{s.estimated_minutes}m</span>
+                    <span className="text-[8px] uppercase tracking-wider bg-gray-100 text-gray-600 rounded px-1 py-0.5 shrink-0">{s.step_type}</span>
+                  </div>
+                ))}
+              </div>
+
+              {(tpl.milestones || []).length > 0 && (
+                <>
+                  <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1.5">🏁 MILESTONES</p>
+                  <div className="space-y-1">
+                    {tpl.milestones.map((m, i) => (
+                      <div key={i} className="flex items-baseline gap-2 px-2 py-1 rounded border border-emerald-100 bg-emerald-50/40">
+                        <span className="text-[10px] font-mono text-emerald-700 shrink-0">Day {m.day}</span>
+                        <span className="text-[11px] font-semibold text-text-primary">{m.title}</span>
+                        <span className="text-[10px] text-gray-600 italic ml-auto">{m.gate}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* Manual apply */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+        <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-2">🔧 MANUAL APPLY</p>
+        <p className="text-[11px] text-gray-600 leading-relaxed mb-3">
+          Apply a template to an existing user (for example, a person whose role changed). Idempotent — won't duplicate.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={applyUserId}
+            onChange={(e) => setApplyUserId(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] bg-white focus:outline-none focus:border-rose-400 min-w-[220px]"
+          >
+            <option value="">Select a user…</option>
+            {allUsers.map((u) => <option key={u.user_id} value={u.user_id}>{u.name} ({u.email})</option>)}
+          </select>
+          <select
+            value={applyJobRole}
+            onChange={(e) => setApplyJobRole(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] bg-white focus:outline-none focus:border-rose-400 min-w-[180px]"
+          >
+            <option value="">Select template…</option>
+            {templates.map((t) => <option key={t.slug} value={t.slug}>{t.label}</option>)}
+          </select>
+          <button
+            onClick={handleApply}
+            disabled={applying || !applyUserId || !applyJobRole}
+            className={`text-[11px] font-semibold rounded-md px-3 py-2 transition-colors ${
+              applying ? "bg-rose-100 text-rose-400 cursor-wait"
+                : !applyUserId || !applyJobRole ? "bg-rose-200 text-rose-400 cursor-not-allowed"
+                : "bg-rose-600 text-white hover:bg-rose-700"
+            }`}
+          >
+            {applying ? "Applying…" : "Apply template"}
+          </button>
+        </div>
+        {applyResult && applyResult.ok && !applyResult.skipped_reason && (
+          <div className="mt-3 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50">
+            <p className="text-[11px] text-emerald-700 font-semibold">✓ Applied — created goal "{applyResult.goal_name}" with {applyResult.steps_inserted} path steps.</p>
+          </div>
+        )}
+        {applyResult && applyResult.skipped_reason && (
+          <p className="mt-2 text-[11px] text-amber-700 italic">⚠ Skipped — {applyResult.skipped_reason}</p>
+        )}
+        {applyResult && applyResult.error && (
+          <p className="mt-2 text-[11px] text-red-600">Error: {applyResult.error}</p>
+        )}
+      </section>
+    </>
+  );
+}
+
 
 function SkillHeatmapTab({ actorId }) {
   const [data, setData] = useState(null);

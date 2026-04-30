@@ -808,6 +808,132 @@ export async function adminUpdateUser(actorUserId, targetUserId, fields) {
 }
 
 // ─────────────────────────────────────────────
+// GIGS MODULE — Internal Pilot Pack F.5
+// Cross-team marketplace for short-form internal work
+// ─────────────────────────────────────────────
+
+export async function gigsList(actorUserId, { status, skill, department, search, limit = 50 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/list`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ status, skill, department, search, limit }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, gigs: [], summary: {} } }
+}
+
+export async function gigsGet(actorUserId, gigId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/get`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ gig_id: gigId }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function gigsPost(actorUserId, profile) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/post`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ profile }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function gigsClaim(actorUserId, gigId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/claim`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ gig_id: gigId }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function gigsDeliver(actorUserId, gigId, { deliverableUrl, notes } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/deliver`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ gig_id: gigId, deliverable_url: deliverableUrl || '', notes: notes || '' }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function gigsReview(actorUserId, gigId, decision, reviewNotes = '') {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/review`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ gig_id: gigId, decision, review_notes: reviewNotes }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function gigsCancel(actorUserId, gigId, reason = '') {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/cancel`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ gig_id: gigId, reason }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function gigsMyPosts(actorUserId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/my_posts`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({}),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, gigs: [] } }
+}
+
+export async function gigsMyClaims(actorUserId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/my_claims`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({}),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, gigs: [] } }
+}
+
+export async function gigsPoints(actorUserId, userId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/points`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ user_id: userId }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, balance: 0, history: [] } }
+}
+
+export async function gigsLeaderboard(actorUserId, { limit = 10 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/gigs/leaderboard`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ limit }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, leaderboard: [] } }
+}
+
+// ─────────────────────────────────────────────
 // TEAM MODULE — manager view of team learning progress
 // ─────────────────────────────────────────────
 
@@ -1489,6 +1615,18 @@ const agent = {
   endorseEntry,
   declineEndorsement,
   getResumeFeed,
+  // Gigs marketplace
+  gigsList,
+  gigsGet,
+  gigsPost,
+  gigsClaim,
+  gigsDeliver,
+  gigsReview,
+  gigsCancel,
+  gigsMyPosts,
+  gigsMyClaims,
+  gigsPoints,
+  gigsLeaderboard,
 }
 
 export default agent

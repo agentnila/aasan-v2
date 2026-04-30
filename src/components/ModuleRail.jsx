@@ -16,6 +16,7 @@ const MODULES = [
   { id: "stay-ahead", to: "/stay-ahead",  icon: "🛡",  label: "Stay Ahead",  color: "text-gray-700",     activeBg: "bg-purple-50 text-purple-700" },
   { id: "resume",     to: "/resume",      icon: "📋", label: "Resume",      color: "text-gray-700",     activeBg: "bg-emerald-50 text-emerald-700" },
   { id: "marketplace",to: "/marketplace", icon: "🤝", label: "Marketplace", color: "text-gray-700",     activeBg: "bg-rose-50 text-rose-700" },
+  { id: "team",       to: "/team",        icon: "👥", label: "Team",        color: "text-gray-700",     activeBg: "bg-amber-50 text-amber-700" },
 ];
 
 export default function ModuleRail() {

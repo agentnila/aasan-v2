@@ -632,6 +632,41 @@ export async function findSMESlots(smeId, learnerId, { durationMin = 30, count =
   }
 }
 
+// ─────────────────────────────────────────────
+// TEAM MODULE — manager view of team learning progress
+// ─────────────────────────────────────────────
+
+export async function listTeam(managerId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/team/list`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ manager_id: managerId || 'demo-user' }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, team: [], count: 0 } }
+}
+
+export async function getTeamMember(managerId, memberId) {
+  if (!memberId) return { error: 'member_id required' }
+  try {
+    const res = await fetch(`${RENDER_URL}/team/member`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ manager_id: managerId || 'demo-user', member_id: memberId }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function sendTeamKudos({ managerId, reportId, message }) {
+  try {
+    const res = await fetch(`${RENDER_URL}/team/kudos`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ manager_id: managerId || 'demo-user', report_id: reportId, message }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
 export async function listMyBookings(userId, { includePast = false } = {}) {
   if (!userId) return { error: 'user_id required', as_learner: [], as_sme: [], total: 0 }
   try {
@@ -1226,6 +1261,9 @@ const agent = {
   findSMESlots,
   bookSMESlot,
   listMyBookings,
+  listTeam,
+  getTeamMember,
+  sendTeamKudos,
   registerSME,
   getSMEProfile,
   listSMEs,

@@ -290,8 +290,19 @@ export default function ResumeCanvas() {
                           <span className="text-[10px] font-mono text-gray-400 shrink-0">{e.date}</span>
                           <span className="text-[12px] font-semibold text-text-primary truncate">{e.title}</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span className="text-[9px] text-gray-500">{meta.label}</span>
+                          {(() => {
+                            const approved = (e.endorsements || []).filter(en => en.status === "approved").length;
+                            const pending = (e.endorsements || []).filter(en => en.status === "pending").length;
+                            return (
+                              <>
+                                {approved > 0 && <span className="text-[9px] bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0.5 font-medium">⭐ {approved}</span>}
+                                {pending > 0 && <span className="text-[9px] bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5 font-medium">⏳ {pending}</span>}
+                                {(e.shared_with || []).length > 0 && <span className="text-[9px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-medium">📤 {(e.shared_with || []).length}</span>}
+                              </>
+                            );
+                          })()}
                           {(e.outcomes || []).slice(0, 1).map((o, j) => (
                             <span key={j} className="text-[10px] text-gray-500 truncate">· {o}</span>
                           ))}
@@ -437,18 +448,40 @@ export default function ResumeCanvas() {
                   <div>
                     <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1.5">HIGHLIGHTED PROJECTS · {tailorResult.highlighted_projects.length}</p>
                     <div className="space-y-2">
-                      {tailorResult.highlighted_projects.map((p, i) => (
-                        <div key={i} className="px-3 py-2 rounded-lg border border-gray-100">
-                          <div className="flex items-baseline justify-between">
-                            <span className="text-[11px] font-semibold text-text-primary">{p.title}</span>
-                            <span className="text-[9px] font-mono text-emerald-700">{Math.round((p.match_score || 0) * 100)}%</span>
+                      {tailorResult.highlighted_projects.map((p, i) => {
+                        const ends = p.endorsements || [];
+                        return (
+                          <div key={i} className="px-3 py-2 rounded-lg border border-gray-100">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="text-[11px] font-semibold text-text-primary">{p.title}</span>
+                              <span className="text-[9px] font-mono text-emerald-700 shrink-0">{Math.round((p.match_score || 0) * 100)}%</span>
+                            </div>
+                            {(p.company || p.project) && (
+                              <p className="text-[9px] text-gray-500 mt-0.5">
+                                {p.company && <span>🏢 {p.company}</span>}
+                                {p.company && p.project && <span> · </span>}
+                                {p.project && <span>📁 {p.project}</span>}
+                              </p>
+                            )}
+                            {p.match_reason && <p className="text-[10px] text-gray-500 mt-0.5 italic">{p.match_reason}</p>}
+                            {(p.outcomes || []).slice(0, 2).map((o, j) => (
+                              <p key={j} className="text-[10px] text-gray-700 mt-0.5">· {o}</p>
+                            ))}
+                            {ends.length > 0 && (
+                              <div className="mt-2 pt-1.5 border-t border-emerald-100 bg-emerald-50/30 rounded-md -mx-3 -mb-2 px-3 pb-2">
+                                <p className="text-[8px] font-bold text-emerald-700 tracking-wider mt-1.5 mb-1">⭐ ENDORSED BY {ends.length} {ends.length === 1 ? "PEER" : "PEERS"}</p>
+                                {ends.map((en, j) => (
+                                  <div key={j} className="text-[10px] mt-0.5">
+                                    <span className="font-semibold text-text-primary">{en.endorser_name}</span>
+                                    {en.endorser_role && <span className="text-gray-500"> · {en.endorser_role}</span>}
+                                    {en.comment && <p className="text-gray-600 italic leading-snug">"{en.comment}"</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          {p.match_reason && <p className="text-[10px] text-gray-500 mt-0.5 italic">{p.match_reason}</p>}
-                          {(p.outcomes || []).slice(0, 2).map((o, j) => (
-                            <p key={j} className="text-[10px] text-gray-700 mt-0.5">· {o}</p>
-                          ))}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

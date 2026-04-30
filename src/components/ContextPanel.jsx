@@ -5,6 +5,7 @@ import agent from '../services/agentService'
 function FeedEvent({ ev, authorEmail }) {
   const [endorsing, setEndorsing] = useState(false)
   const [done, setDone] = useState(false)
+  const [declined, setDeclined] = useState(false)
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
   const [comment, setComment] = useState('')
@@ -21,6 +22,20 @@ function FeedEvent({ ev, authorEmail }) {
       comment,
     })
     if (!result?.error) setDone(true)
+    setEndorsing(false)
+  }
+
+  async function submitDecline() {
+    setEndorsing(true)
+    const reason = window.prompt("Decline endorsement — reason? (optional, just hit OK to skip)", "")
+    if (reason === null) { setEndorsing(false); return }
+    const result = await agent.declineEndorsement({
+      authorUserId: ev.from_user_id,
+      entryId: ev.entry_id,
+      endorserEmail: authorEmail,
+      reason,
+    })
+    if (!result?.error) setDeclined(true)
     setEndorsing(false)
   }
 
@@ -51,6 +66,8 @@ function FeedEvent({ ev, authorEmail }) {
         </p>
         {done ? (
           <p className="text-[10px] text-emerald-700 mt-1 font-semibold">✓ Endorsed</p>
+        ) : declined ? (
+          <p className="text-[10px] text-gray-500 mt-1 font-semibold italic">Declined</p>
         ) : showForm ? (
           <div className="mt-2 space-y-1.5">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className="w-full px-2 py-1 rounded border border-amber-200 text-[10px]" />
@@ -64,9 +81,14 @@ function FeedEvent({ ev, authorEmail }) {
             </div>
           </div>
         ) : (
-          <button onClick={() => setShowForm(true)} className="mt-1.5 text-[10px] font-semibold bg-amber-600 text-white hover:bg-amber-700 rounded-md px-2 py-1">
-            ⭐ Endorse →
-          </button>
+          <div className="flex gap-1.5 mt-1.5">
+            <button onClick={() => setShowForm(true)} disabled={endorsing} className="text-[10px] font-semibold bg-amber-600 text-white hover:bg-amber-700 rounded-md px-2 py-1">
+              ⭐ Endorse →
+            </button>
+            <button onClick={submitDecline} disabled={endorsing} className="text-[10px] font-semibold border border-gray-300 text-gray-500 hover:bg-gray-50 rounded-md px-2 py-1">
+              Decline
+            </button>
+          </div>
         )}
       </div>
     )
@@ -78,6 +100,16 @@ function FeedEvent({ ev, authorEmail }) {
         <p className="text-[11px] font-medium text-text-primary leading-snug">{ev.from_user_name || ev.from_user_email}{ev.from_user_role && <span className="font-normal text-gray-500"> · {ev.from_user_role}</span>}</p>
         <p className="text-[10px] text-gray-500 mt-0.5">on "{ev.entry_title}"</p>
         {ev.comment && <p className="text-[10px] text-gray-700 italic mt-1">"{ev.comment}"</p>}
+      </div>
+    )
+  }
+  if (ev.type === 'endorsement_declined') {
+    return (
+      <div className="px-2 py-1.5 rounded-md border border-gray-200 bg-gray-50">
+        <p className="text-[10px] text-gray-500 font-semibold tracking-wider mb-0.5">— ENDORSEMENT DECLINED</p>
+        <p className="text-[11px] font-medium text-text-primary leading-snug">{ev.from_user_email}</p>
+        <p className="text-[10px] text-gray-500 mt-0.5">on "{ev.entry_title}"</p>
+        {ev.reason && <p className="text-[10px] text-gray-600 italic mt-1">"{ev.reason}"</p>}
       </div>
     )
   }

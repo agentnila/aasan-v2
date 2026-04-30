@@ -257,6 +257,19 @@ export async function requestEndorsements(userId, entryId, peerEmails) {
   } catch (err) { return { error: err.message } }
 }
 
+export async function declineEndorsement({ authorUserId, entryId, endorserEmail, reason = '' }) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/decline_endorsement`, {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        author_user_id: authorUserId, entry_id: entryId,
+        endorser_email: endorserEmail, reason,
+      }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
 export async function endorseEntry({ authorUserId, entryId, endorserEmail, endorserName, endorserRole, comment }) {
   try {
     const res = await fetch(`${RENDER_URL}/resume/endorse`, {
@@ -1235,6 +1248,7 @@ const agent = {
   shareEntry,
   requestEndorsements,
   endorseEntry,
+  declineEndorsement,
   getResumeFeed,
 }
 

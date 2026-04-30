@@ -710,6 +710,61 @@ export async function runDriveIndex({ limit = 25, targetUserId } = {}) {
   }
 }
 
+export async function markStepDone(userId, goalId, stepId, { mastery, durationMinutes } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/path/mark_done`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: userId, goal_id: goalId, step_id: stepId,
+        mastery, duration_minutes: durationMinutes,
+      }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function skipStep(userId, goalId, stepId, reason = '') {
+  try {
+    const res = await fetch(`${RENDER_URL}/path/skip_step`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId, goal_id: goalId, step_id: stepId, reason }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function reorderStep(userId, goalId, stepId, newOrder) {
+  try {
+    const res = await fetch(`${RENDER_URL}/path/reorder`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId, goal_id: goalId, step_id: stepId, new_order: newOrder }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function listScheduleBlocks(userId, { includePast = false } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/calendar/blocks`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId, include_past: includePast }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, blocks: [] }
+  }
+}
+
 export async function createGoal(userId, goal) {
   if (!userId) return { error: 'user_id required' }
   if (!goal?.name?.trim?.()) return { error: 'goal.name required' }
@@ -1118,6 +1173,10 @@ const agent = {
   getSMEProfile,
   listSMEs,
   createGoal,
+  markStepDone,
+  skipStep,
+  reorderStep,
+  listScheduleBlocks,
   getContentCoverage,
   semanticSearch,
   runDriveIndex,

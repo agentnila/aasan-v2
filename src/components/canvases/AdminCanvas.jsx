@@ -131,11 +131,12 @@ export default function AdminCanvas() {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-gray-200">
         <Tab active={tab === "people"}   onClick={() => setTab("people")}   label="👥 People"   count={users?.total} />
+        <Tab active={tab === "reports"}  onClick={() => setTab("reports")}  label="📊 Reports" />
+        <Tab active={tab === "audit"}    onClick={() => setTab("audit")}    label="📋 Audit log" />
         <Tab active={tab === "modules"}  onClick={() => setTab("modules")}  label="📦 Modules"  badge="soon" />
         <Tab active={tab === "sso"}      onClick={() => setTab("sso")}      label="🔐 SSO"       badge="soon" />
         <Tab active={tab === "branding"} onClick={() => setTab("branding")} label="🎨 Branding"  badge="soon" />
         <Tab active={tab === "billing"}  onClick={() => setTab("billing")}  label="💳 Billing"   badge="soon" />
-        <Tab active={tab === "audit"}    onClick={() => setTab("audit")}    label="📋 Audit log" />
       </div>
 
       {tab === "people" && (
@@ -316,8 +317,9 @@ export default function AdminCanvas() {
         </>
       )}
 
+      {tab === "reports" && <ReportsTab actorId={actorId} />}
       {tab === "audit" && <AuditLogTab actorId={actorId} />}
-      {tab !== "people" && tab !== "audit" && <SoonStub tab={tab} />}
+      {tab !== "people" && tab !== "audit" && tab !== "reports" && <SoonStub tab={tab} />}
     </div>
   );
 }
@@ -366,6 +368,166 @@ function SoonStub({ tab }) {
     </div>
   );
 }
+
+function ReportsTab({ actorId }) {
+  const [list, setList] = useState(null);
+  const [active, setActive] = useState("skill_coverage");
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [periodDays, setPeriodDays] = useState(30);
+  const [department, setDepartment] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    agent.adminReportsList(actorId).then(setList);
+  }, []);
+
+  async function runReport() {
+    setLoading(true);
+    const filters = {};
+    if (active === "engagement") filters.period_days = Number(periodDays);
+    if (department.trim()) filters.department = department.trim();
+    const result = await agent.adminRunReport(actorId, active, filters);
+    setReport(result);
+    setLoading(false);
+  }
+
+  useEffect(() => { runReport(); /* eslint-disable-next-line */ }, [active]);
+
+  async function exportCsv() {
+    setExporting(true);
+    const filters = {};
+    if (active === "engagement") filters.period_days = Number(periodDays);
+    if (department.trim()) filters.department = department.trim();
+    const result = await agent.adminExportReportCsv(actorId, active, filters);
+    if (result?.csv) {
+      const blob = new Blob([result.csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url;
+      a.download = result.filename || `aasan-report-${active}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setExporting(false);
+  }
+
+  const reports = list?.reports || [];
+  const summary = report?.summary || {};
+  const columns = report?.columns || [];
+  const rows = report?.rows || [];
+
+  return (
+    <>
+      {/* Report selector */}
+      <section className="grid grid-cols-3 gap-3">
+        {reports.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => setActive(r.id)}
+            className={`text-left p-4 rounded-2xl border-2 transition-all ${
+              active === r.id ? "border-rose-500 bg-rose-50/40" : "border-gray-200 bg-white hover:border-rose-300"
+            }`}
+          >
+            <p className="text-[12px] font-bold text-text-primary mb-1">{r.title}</p>
+            <p className="text-[11px] text-gray-600 leading-relaxed">{r.description}</p>
+          </button>
+        ))}
+      </section>
+
+      {/* Filters + Export */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex items-center gap-3 flex-wrap">
+        <input
+          type="text"
+          value={department}
+          onChange={(e) => setDepartment(e.target.value)}
+          placeholder="Filter by department (exact match)"
+          className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-rose-400 min-w-[220px]"
+        />
+        {active === "engagement" && (
+          <select
+            value={periodDays}
+            onChange={(e) => setPeriodDays(Number(e.target.value))}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-rose-400 bg-white"
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={14}>Last 14 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
+        )}
+        <button
+          onClick={runReport}
+          disabled={loading}
+          className={`text-[11px] font-semibold rounded-md px-2.5 py-2 transition-colors ${
+            loading ? "bg-rose-100 text-rose-400 cursor-wait" : "bg-rose-600 text-white hover:bg-rose-700"
+          }`}
+        >
+          {loading ? "Running…" : "↻ Run report"}
+        </button>
+        <button
+          onClick={exportCsv}
+          disabled={exporting || rows.length === 0}
+          className={`text-[11px] font-semibold rounded-md px-2.5 py-2 transition-colors ${
+            exporting ? "bg-rose-100 text-rose-400 cursor-wait"
+              : rows.length === 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "bg-white border border-rose-300 text-rose-700 hover:bg-rose-50"
+          }`}
+        >
+          {exporting ? "Exporting…" : "↓ Export CSV"}
+        </button>
+      </section>
+
+      {/* Summary strip */}
+      {report && summary && (
+        <section className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+          <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-2">SUMMARY</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {Object.entries(summary).filter(([k]) => typeof summary[k] !== "object").map(([k, v]) => (
+              <div key={k}>
+                <p className="text-[9px] text-gray-400 font-semibold tracking-wider uppercase">{k.replace(/_/g, " ")}</p>
+                <p className="text-[16px] font-bold text-text-primary leading-none">{String(v)}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Report table */}
+      <section className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        {loading && <p className="px-4 py-6 text-[12px] text-gray-400">Running report…</p>}
+        {!loading && rows.length === 0 && (
+          <p className="px-4 py-6 text-[12px] text-gray-400 italic">No rows in this report. Try changing filters or running a different report.</p>
+        )}
+        {!loading && rows.length > 0 && (
+          <>
+            <div className="grid gap-3 px-4 py-2.5 border-b border-gray-100 bg-gray-50/50" style={{ gridTemplateColumns: `repeat(${columns.length}, 1fr)` }}>
+              {columns.map((col) => (
+                <p key={col.key} className="text-[9px] font-semibold text-gray-400 tracking-wider uppercase truncate">{col.label}</p>
+              ))}
+            </div>
+            <div className="max-h-[28rem] overflow-y-auto">
+              {rows.map((row, i) => (
+                <div key={i} className="grid gap-3 px-4 py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/40" style={{ gridTemplateColumns: `repeat(${columns.length}, 1fr)` }}>
+                  {columns.map((col) => (
+                    <p key={col.key} className="text-[11px] text-gray-700 truncate">{String(row[col.key] ?? "—")}</p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      {report && (
+        <p className="text-[9px] text-gray-400 italic">
+          Generated at {report.generated_at} · {rows.length} row{rows.length !== 1 ? "s" : ""}
+          {report.period_days ? ` · last ${report.period_days} days` : ""}
+        </p>
+      )}
+    </>
+  );
+}
+
 
 function AuditLogTab({ actorId }) {
   const [data, setData] = useState(null);

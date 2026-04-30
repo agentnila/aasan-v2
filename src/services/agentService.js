@@ -685,6 +685,39 @@ export async function adminImportUsersCsv(actorUserId, csvText) {
   } catch (err) { return { error: err.message } }
 }
 
+export async function adminReportsList(actorUserId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/reports/list`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({}),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, reports: [] } }
+}
+
+export async function adminRunReport(actorUserId, reportId, filters = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/reports/run`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ report_id: reportId, filters }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function adminExportReportCsv(actorUserId, reportId, filters = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/reports/export_csv`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ report_id: reportId, filters }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, csv: '' } }
+}
+
 export async function adminAuditLog(actorUserId, filters = {}) {
   try {
     const res = await fetch(`${RENDER_URL}/admin/audit_log`, {
@@ -1381,6 +1414,9 @@ const agent = {
   adminUsersCsvSample,
   adminAuditLog,
   adminAuditLogExportCsv,
+  adminReportsList,
+  adminRunReport,
+  adminExportReportCsv,
   registerSME,
   getSMEProfile,
   listSMEs,

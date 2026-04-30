@@ -666,6 +666,50 @@ function _stubFindSMEs(topic, errorMsg = null) {
 // Path Engine — V3 Live Persistent Learning Paths
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// LIBRARY MODULE — content discovery + coverage
+// ─────────────────────────────────────────────
+
+export async function getContentCoverage() {
+  try {
+    const res = await fetch(`${RENDER_URL}/content/coverage`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, total: 0, by_source: {}, by_skill: {}, by_difficulty: {}, recent: [] }
+  }
+}
+
+export async function semanticSearch(query, { topK = 8 } = {}) {
+  if (!query?.trim?.()) return { matches: [], query: '' }
+  try {
+    const res = await fetch(`${RENDER_URL}/content/semantic_search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, top_k: topK }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, matches: [], query }
+  }
+}
+
+export async function runDriveIndex({ limit = 25, targetUserId } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/drive/index`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ limit, target_user_id: targetUserId }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
 export async function createGoal(userId, goal) {
   if (!userId) return { error: 'user_id required' }
   if (!goal?.name?.trim?.()) return { error: 'goal.name required' }
@@ -1074,6 +1118,9 @@ const agent = {
   getSMEProfile,
   listSMEs,
   createGoal,
+  getContentCoverage,
+  semanticSearch,
+  runDriveIndex,
   bookSME,
   // Career Compass family
   runStayAhead,

@@ -674,6 +674,28 @@ export async function adminSetRole(actorUserId, targetUserId, role) {
   } catch (err) { return { error: err.message } }
 }
 
+export async function adminImportUsersCsv(actorUserId, csvText) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/users/import_csv`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ csv: csvText }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function adminUsersCsvSample(actorUserId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/users/csv_sample`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({}),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, csv: '' } }
+}
+
 export async function adminUpdateUser(actorUserId, targetUserId, fields) {
   try {
     const res = await fetch(`${RENDER_URL}/admin/users/update`, {
@@ -1321,6 +1343,8 @@ const agent = {
   adminListUsers,
   adminSetRole,
   adminUpdateUser,
+  adminImportUsersCsv,
+  adminUsersCsvSample,
   registerSME,
   getSMEProfile,
   listSMEs,

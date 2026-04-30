@@ -36,6 +36,10 @@ export default function AdminCanvas() {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   async function loadMe() {
     const data = await agent.getMe(actorId);
@@ -56,6 +60,35 @@ export default function AdminCanvas() {
     await agent.adminSetRole(actorId, target.user_id, newRole);
     await loadUsers();
     setBusyId(null);
+  }
+
+  async function downloadSampleCsv() {
+    const result = await agent.adminUsersCsvSample(actorId);
+    const blob = new Blob([result.csv || ""], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "aasan-users-sample.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleFileChosen(file) {
+    if (!file) return;
+    const text = await file.text();
+    setImportText(text);
+  }
+
+  async function submitImport() {
+    if (!importText.trim()) return;
+    setImporting(true);
+    setImportResult(null);
+    const result = await agent.adminImportUsersCsv(actorId, importText);
+    setImportResult(result);
+    setImporting(false);
+    if (result?.ok) {
+      await loadUsers();
+    }
   }
 
   // 403-style surface — non-admins still see the canvas (we routed them here)
@@ -136,21 +169,104 @@ export default function AdminCanvas() {
                 ))}
               </select>
               <button
-                disabled
-                className="text-[11px] font-semibold bg-gray-100 text-gray-400 rounded-md px-2.5 py-2 cursor-not-allowed"
-                title="CSV import — Phase A.2"
+                onClick={() => { setImportOpen(!importOpen); setImportResult(null); }}
+                className={`text-[11px] font-semibold rounded-md px-2.5 py-2 transition-colors ${
+                  importOpen ? "bg-rose-600 text-white" : "bg-white border border-rose-300 text-rose-700 hover:bg-rose-50"
+                }`}
               >
-                📥 CSV import (soon)
+                📥 {importOpen ? "Close import" : "CSV import"}
               </button>
               <button
                 disabled
                 className="text-[11px] font-semibold bg-gray-100 text-gray-400 rounded-md px-2.5 py-2 cursor-not-allowed"
-                title="Invite user — Phase A.2"
+                title="Invite user — landing in SCIM phase"
               >
                 + Invite (soon)
               </button>
             </div>
           </section>
+
+          {/* CSV import inline panel */}
+          {importOpen && (
+            <section className="bg-white border border-rose-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-baseline justify-between mb-2">
+                <p className="text-[10px] text-rose-700 font-bold tracking-wider">📥 BULK IMPORT USERS FROM CSV</p>
+                <button onClick={downloadSampleCsv} className="text-[11px] text-rose-700 hover:underline font-semibold">
+                  ↓ Download sample CSV
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-600 leading-relaxed mb-3">
+                Required column: <code className="text-[10px] bg-gray-100 px-1 rounded">email</code>. Optional:
+                <code className="text-[10px] bg-gray-100 px-1 rounded ml-1">name</code>
+                <code className="text-[10px] bg-gray-100 px-1 rounded ml-1">role</code>
+                <code className="text-[10px] bg-gray-100 px-1 rounded ml-1">department</code>
+                <code className="text-[10px] bg-gray-100 px-1 rounded ml-1">manager_email</code>
+                <code className="text-[10px] bg-gray-100 px-1 rounded ml-1">is_active</code>.
+                Idempotent on email — existing users update, new users create. <span className="font-semibold">Manager email links resolve in a second pass</span>, so you can import a whole org in one shot.
+              </p>
+
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-[11px] font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-md px-2.5 py-1.5 cursor-pointer transition-colors">
+                  Choose file…
+                  <input type="file" accept=".csv,text/csv" onChange={(e) => handleFileChosen(e.target.files?.[0])} className="hidden" />
+                </label>
+                <p className="text-[10px] text-gray-400 italic">…or paste content below</p>
+              </div>
+
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder="email,name,role,department,manager_email,is_active&#10;sarah@example.com,Sarah Chen,manager,Platform,balaji@example.com,true&#10;…"
+                rows={8}
+                disabled={importing}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[11px] font-mono focus:outline-none focus:border-rose-400 resize-y mb-2"
+              />
+
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-gray-400 italic">{importText.split("\n").filter(l => l.trim()).length} lines (incl. header)</p>
+                <button
+                  onClick={submitImport}
+                  disabled={importing || !importText.trim()}
+                  className={`text-[12px] font-semibold rounded-md px-3 py-1.5 transition-colors ${
+                    importing ? "bg-rose-100 text-rose-400 cursor-wait"
+                      : !importText.trim() ? "bg-rose-200 text-rose-400 cursor-not-allowed"
+                      : "bg-rose-600 text-white hover:bg-rose-700"
+                  }`}
+                >
+                  {importing ? "Importing…" : "✓ Import users"}
+                </button>
+              </div>
+
+              {importResult && !importResult.error && (
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                  <ResultStat label="Created" value={importResult.created} tone="emerald" />
+                  <ResultStat label="Updated" value={importResult.updated} tone="blue" />
+                  <ResultStat label="Skipped" value={importResult.skipped} tone={importResult.skipped > 0 ? "amber" : "neutral"} />
+                  <ResultStat label="Errors" value={(importResult.errors || []).length} tone={(importResult.errors || []).length > 0 ? "red" : "neutral"} />
+                </div>
+              )}
+              {importResult?.manager_links_resolved_in_second_pass > 0 && (
+                <p className="mt-2 text-[10px] text-gray-500 italic">↩ {importResult.manager_links_resolved_in_second_pass} manager_email link{importResult.manager_links_resolved_in_second_pass === 1 ? "" : "s"} resolved in second pass.</p>
+              )}
+              {importResult?.error && (
+                <p className="mt-3 text-[11px] text-red-600">Error: {importResult.error}</p>
+              )}
+              {(importResult?.errors || []).length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[9px] font-semibold text-amber-700 tracking-wider mb-1">⚠ ROW-LEVEL ISSUES · {importResult.errors.length}</p>
+                  <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                    {importResult.errors.map((e, i) => (
+                      <p key={i} className="text-[10px] text-gray-700 px-2 py-1 bg-amber-50/60 border border-amber-100 rounded">
+                        {e.row != null && <span className="font-mono text-gray-500">row {e.row}</span>}
+                        {e.email && <span className="font-mono text-gray-500">{e.row != null ? " · " : ""}{e.email}</span>}
+                        <span className="ml-1.5">{e.error}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* People table */}
           <section className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -248,6 +364,22 @@ function SoonStub({ tab }) {
       <p className="text-[16px] font-bold text-text-primary mb-1">{labels.title}</p>
       <p className="text-[12px] text-gray-600 leading-relaxed">{labels.pitch}</p>
       <p className="text-[10px] text-gray-400 italic mt-3">Internal Pilot Pack · landing in the next 2 weeks.</p>
+    </div>
+  );
+}
+
+function ResultStat({ label, value, tone = "neutral" }) {
+  const colors = {
+    emerald: { border: "border-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700" },
+    blue:    { border: "border-blue-200",    bg: "bg-blue-50",    text: "text-blue-700" },
+    amber:   { border: "border-amber-200",   bg: "bg-amber-50",   text: "text-amber-700" },
+    red:     { border: "border-red-200",     bg: "bg-red-50",     text: "text-red-700" },
+    neutral: { border: "border-gray-200",    bg: "bg-gray-50",    text: "text-gray-700" },
+  }[tone];
+  return (
+    <div className={`border ${colors.border} ${colors.bg} rounded-lg p-2`}>
+      <p className={`text-[9px] font-semibold tracking-wider ${colors.text}`}>{label.toUpperCase()}</p>
+      <p className={`text-[18px] font-bold ${colors.text} leading-none mt-0.5`}>{value}</p>
     </div>
   );
 }

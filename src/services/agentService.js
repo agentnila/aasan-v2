@@ -685,6 +685,17 @@ export async function adminImportUsersCsv(actorUserId, csvText) {
   } catch (err) { return { error: err.message } }
 }
 
+export async function adminSkillHeatmap(actorUserId, { departmentsFilter } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/skill_heatmap`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ departments_filter: departmentsFilter || null }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, skill_clusters: [], departments: [], matrix: [] } }
+}
+
 export async function adminReportsList(actorUserId) {
   try {
     const res = await fetch(`${RENDER_URL}/admin/reports/list`, {
@@ -1417,6 +1428,7 @@ const agent = {
   adminReportsList,
   adminRunReport,
   adminExportReportCsv,
+  adminSkillHeatmap,
   registerSME,
   getSMEProfile,
   listSMEs,

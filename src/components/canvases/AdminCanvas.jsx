@@ -132,6 +132,7 @@ export default function AdminCanvas() {
       <div className="flex items-center gap-1 border-b border-gray-200">
         <Tab active={tab === "people"}   onClick={() => setTab("people")}   label="👥 People"   count={users?.total} />
         <Tab active={tab === "reports"}  onClick={() => setTab("reports")}  label="📊 Reports" />
+        <Tab active={tab === "heatmap"}  onClick={() => setTab("heatmap")}  label="🌡 Skill heatmap" />
         <Tab active={tab === "audit"}    onClick={() => setTab("audit")}    label="📋 Audit log" />
         <Tab active={tab === "modules"}  onClick={() => setTab("modules")}  label="📦 Modules"  badge="soon" />
         <Tab active={tab === "sso"}      onClick={() => setTab("sso")}      label="🔐 SSO"       badge="soon" />
@@ -318,8 +319,9 @@ export default function AdminCanvas() {
       )}
 
       {tab === "reports" && <ReportsTab actorId={actorId} />}
+      {tab === "heatmap" && <SkillHeatmapTab actorId={actorId} />}
       {tab === "audit" && <AuditLogTab actorId={actorId} />}
-      {tab !== "people" && tab !== "audit" && tab !== "reports" && <SoonStub tab={tab} />}
+      {tab !== "people" && tab !== "audit" && tab !== "reports" && tab !== "heatmap" && <SoonStub tab={tab} />}
     </div>
   );
 }
@@ -368,6 +370,208 @@ function SoonStub({ tab }) {
     </div>
   );
 }
+
+function SkillHeatmapTab({ actorId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeCell, setActiveCell] = useState(null); // {dept, skill}
+
+  async function load() {
+    setLoading(true);
+    const result = await agent.adminSkillHeatmap(actorId);
+    setData(result);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const skills = data?.skill_clusters || [];
+  const depts = data?.departments || [];
+  const matrix = data?.matrix || [];
+  const cellUsers = data?.cell_users || {};
+  const supply = data?.supply || { content: {}, smes: {} };
+  const demandTotal = data?.demand_total || {};
+  const gaps = data?.gaps || [];
+  const summary = data?.summary || {};
+
+  // Find max for color intensity
+  const maxCount = Math.max(1, ...matrix.flat());
+  function intensity(count) {
+    if (count === 0) return "bg-gray-50 text-gray-300";
+    const ratio = count / maxCount;
+    if (ratio > 0.66) return "bg-rose-700 text-white";
+    if (ratio > 0.33) return "bg-rose-500 text-white";
+    return "bg-rose-200 text-rose-900";
+  }
+
+  const activeUsers = activeCell ? (cellUsers[activeCell.dept]?.[activeCell.skill] || []) : [];
+
+  return (
+    <>
+      {/* Stats strip */}
+      <section className="grid grid-cols-5 gap-3">
+        <Stat label="Users in scope" value={summary.users_in_scope ?? "—"} />
+        <Stat label="Skills tracked" value={summary.skill_clusters_tracked ?? "—"} />
+        <Stat label="Total demand" value={summary.total_demand ?? "—"} />
+        <Stat label="Content items" value={summary.total_content_items ?? "—"} />
+        <Stat label="Gaps detected" value={summary.gaps_detected ?? "—"} tone={summary.gaps_detected > 0 ? "amber" : "neutral"} />
+      </section>
+
+      {loading && <p className="text-[12px] text-gray-400">Building org-level skill heatmap…</p>}
+
+      {!loading && skills.length === 0 && (
+        <section className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
+          <div className="text-[28px] mb-2">🌡</div>
+          <p className="text-[14px] font-bold text-text-primary mb-1">No skill data yet</p>
+          <p className="text-[12px] text-gray-500 leading-relaxed max-w-md mx-auto">
+            People need to set goals or learning paths for the heatmap to populate. Index content via Library so the supply side has values too.
+          </p>
+        </section>
+      )}
+
+      {!loading && skills.length > 0 && (
+        <>
+          {/* Heatmap */}
+          <section className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm overflow-x-auto">
+            <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-3">DEMAND HEATMAP · DEPARTMENTS × SKILL CLUSTERS</p>
+            <table className="border-collapse text-[10px]">
+              <thead>
+                <tr>
+                  <th className="text-left py-1.5 pr-2 sticky left-0 bg-white z-10 font-semibold text-gray-400 tracking-wider min-w-[140px]">Department</th>
+                  {skills.map((s) => (
+                    <th key={s} className="text-center px-1 py-1.5 font-mono text-rose-700 min-w-[64px]" title={s}>
+                      <div className="rotate-[-45deg] origin-left translate-y-2 whitespace-nowrap">{s}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {depts.map((d, i) => (
+                  <tr key={d}>
+                    <td className="py-1 pr-2 sticky left-0 bg-white z-10 text-[11px] font-semibold text-text-primary truncate max-w-[200px]">{d}</td>
+                    {skills.map((s, j) => {
+                      const count = matrix[i]?.[j] || 0;
+                      const isActive = activeCell?.dept === d && activeCell?.skill === s;
+                      return (
+                        <td key={`${d}-${s}`} className="px-0.5 py-0.5">
+                          <button
+                            onClick={() => count > 0 && setActiveCell(isActive ? null : { dept: d, skill: s })}
+                            disabled={count === 0}
+                            className={`w-full h-8 rounded text-[11px] font-bold transition-all ${intensity(count)} ${
+                              count > 0 ? "hover:ring-2 hover:ring-rose-400 cursor-pointer" : "cursor-default"
+                            } ${isActive ? "ring-2 ring-rose-700" : ""}`}
+                            title={`${d} · ${s}: ${count} ${count === 1 ? "person" : "people"}`}
+                          >
+                            {count || ""}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {/* Supply rows */}
+                <tr className="border-t-2 border-gray-200">
+                  <td className="py-1.5 pr-2 sticky left-0 bg-white z-10 text-[10px] font-semibold text-gray-500 italic">📚 Content</td>
+                  {skills.map((s) => (
+                    <td key={`content-${s}`} className="px-0.5 py-1 text-center">
+                      <span className={`inline-block min-w-[28px] px-1 py-0.5 rounded text-[10px] font-mono ${
+                        supply.content[s] > 0 ? "bg-blue-50 text-blue-700" : "text-gray-300"
+                      }`}>
+                        {supply.content[s] || 0}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-1.5 pr-2 sticky left-0 bg-white z-10 text-[10px] font-semibold text-gray-500 italic">🤝 SMEs</td>
+                  {skills.map((s) => (
+                    <td key={`sme-${s}`} className="px-0.5 py-1 text-center">
+                      <span className={`inline-block min-w-[28px] px-1 py-0.5 rounded text-[10px] font-mono ${
+                        supply.smes[s] > 0 ? "bg-violet-50 text-violet-700" : "text-gray-300"
+                      }`}>
+                        {supply.smes[s] || 0}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-1.5 pr-2 sticky left-0 bg-white z-10 text-[10px] font-semibold text-gray-500 italic">⚡ Demand</td>
+                  {skills.map((s) => (
+                    <td key={`demand-${s}`} className="px-0.5 py-1 text-center">
+                      <span className="inline-block min-w-[28px] px-1 py-0.5 rounded text-[10px] font-mono bg-rose-50 text-rose-700">
+                        {demandTotal[s] || 0}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+            <p className="text-[10px] text-gray-400 italic mt-3">
+              Cell intensity = number of people in that department working on that skill cluster (via primary goal, path step, or recent session). Click a cell to see who.
+              Bottom rows show supply-side: indexed content items + SMEs offering that topic.
+            </p>
+          </section>
+
+          {/* Active cell drill-down */}
+          {activeCell && activeUsers.length > 0 && (
+            <section className="bg-white border border-rose-200 rounded-2xl p-4 shadow-sm">
+              <p className="text-[10px] text-rose-700 font-semibold tracking-wider mb-2">
+                🔍 {activeCell.dept} · {activeCell.skill} — {activeUsers.length} {activeUsers.length === 1 ? "person" : "people"}
+                <button onClick={() => setActiveCell(null)} className="ml-3 text-[10px] text-gray-500 hover:text-gray-700 font-normal">✕ Close</button>
+              </p>
+              <div className="space-y-1.5">
+                {activeUsers.map((u) => (
+                  <div key={u.user_id} className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-gray-100">
+                    <div className="w-6 h-6 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center text-[9px] font-bold shrink-0">
+                      {(u.name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+                    </div>
+                    <p className="text-[11px] font-semibold text-text-primary flex-1 truncate">{u.name}</p>
+                    <span className="text-[9px] text-gray-500">{u.role}</span>
+                    <span className="text-[9px] bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{u.status}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Gaps */}
+          {gaps.length > 0 && (
+            <section className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm">
+              <p className="text-[10px] text-amber-700 font-semibold tracking-wider mb-2">⚠ DEMAND-SUPPLY GAPS · {gaps.length}</p>
+              <p className="text-[11px] text-gray-600 leading-relaxed mb-3">
+                Skills people are actively learning but the org has insufficient content or SMEs to support. Address these first — every L&D dollar here delivers max ROI.
+              </p>
+              <div className="space-y-2">
+                {gaps.map((g, i) => {
+                  const tone = g.severity === "high"
+                    ? "border-red-300 bg-red-50/40"
+                    : "border-amber-300 bg-amber-50/40";
+                  const sevTone = g.severity === "high" ? "bg-red-600 text-white" : "bg-amber-500 text-white";
+                  return (
+                    <div key={i} className={`px-3 py-2.5 rounded-lg border ${tone}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-[8px] uppercase tracking-wider rounded px-1.5 py-0.5 font-bold ${sevTone}`}>{g.severity}</span>
+                        <span className="text-[12px] font-bold text-text-primary">{g.skill}</span>
+                        <span className="ml-auto text-[10px] font-mono text-gray-500">demand {g.demand} · supply {g.supply}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-600">
+                        Active in: {g.departments.join(", ") || "—"}.
+                        {g.supply === 0
+                          ? " 🚨 No content indexed, no SMEs registered. Top priority for content acquisition."
+                          : ` Supply ratio is low (${g.supply} content vs ${g.demand} demand). Consider expanding content library or recruiting more SMEs.`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 
 function ReportsTab({ actorId }) {
   const [list, setList] = useState(null);

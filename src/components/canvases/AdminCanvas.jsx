@@ -135,7 +135,7 @@ export default function AdminCanvas() {
         <Tab active={tab === "sso"}      onClick={() => setTab("sso")}      label="🔐 SSO"       badge="soon" />
         <Tab active={tab === "branding"} onClick={() => setTab("branding")} label="🎨 Branding"  badge="soon" />
         <Tab active={tab === "billing"}  onClick={() => setTab("billing")}  label="💳 Billing"   badge="soon" />
-        <Tab active={tab === "audit"}    onClick={() => setTab("audit")}    label="📋 Audit log" badge="soon" />
+        <Tab active={tab === "audit"}    onClick={() => setTab("audit")}    label="📋 Audit log" />
       </div>
 
       {tab === "people" && (
@@ -316,9 +316,8 @@ export default function AdminCanvas() {
         </>
       )}
 
-      {tab !== "people" && (
-        <SoonStub tab={tab} />
-      )}
+      {tab === "audit" && <AuditLogTab actorId={actorId} />}
+      {tab !== "people" && tab !== "audit" && <SoonStub tab={tab} />}
     </div>
   );
 }
@@ -366,6 +365,170 @@ function SoonStub({ tab }) {
       <p className="text-[10px] text-gray-400 italic mt-3">Internal Pilot Pack · landing in the next 2 weeks.</p>
     </div>
   );
+}
+
+function AuditLogTab({ actorId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState("");
+  const [actorFilter, setActorFilter] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    const result = await agent.adminAuditLog(actorId, {
+      search: search || undefined,
+      filter_action: actionFilter || undefined,
+      filter_actor: actorFilter || undefined,
+      limit: 200,
+    });
+    setData(result);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+  // Debounce filters lightly
+  useEffect(() => {
+    const t = setTimeout(load, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line
+  }, [search, actionFilter, actorFilter]);
+
+  async function exportCsv() {
+    setExporting(true);
+    const result = await agent.adminAuditLogExportCsv(actorId, {
+      search: search || undefined,
+      filter_action: actionFilter || undefined,
+      filter_actor: actorFilter || undefined,
+    });
+    if (result?.csv) {
+      const blob = new Blob([result.csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename || "aasan-audit-log.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setExporting(false);
+  }
+
+  const entries = data?.entries || [];
+  const byAction = data?.by_action || {};
+
+  return (
+    <>
+      {/* Stats strip */}
+      <section className="grid grid-cols-4 gap-3">
+        <Stat label="Total events" value={data?.total ?? "—"} />
+        <Stat label="Distinct actions" value={Object.keys(byAction).length || "—"} />
+        <Stat label="Distinct actors" value={Object.keys(data?.by_actor || {}).length || "—"} />
+        <Stat label="Filtered shown" value={data?.filtered_count ?? "—"} />
+      </section>
+
+      {/* Filters */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Full-text search (action, target, actor, details)…"
+            className="col-span-3 px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-rose-400"
+          />
+          <input
+            type="text"
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+            placeholder="action (e.g. admin:* or goal:create)"
+            className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-rose-400 font-mono"
+          />
+          <input
+            type="text"
+            value={actorFilter}
+            onChange={(e) => setActorFilter(e.target.value)}
+            placeholder="actor user_id contains…"
+            className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-rose-400 font-mono"
+          />
+          <button
+            onClick={exportCsv}
+            disabled={exporting || entries.length === 0}
+            className={`text-[11px] font-semibold rounded-md transition-colors ${
+              exporting ? "bg-rose-100 text-rose-400 cursor-wait"
+                : entries.length === 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-rose-600 text-white hover:bg-rose-700"
+            }`}
+          >
+            {exporting ? "Exporting…" : "↓ Export CSV"}
+          </button>
+        </div>
+
+        {/* Top actions strip */}
+        {Object.keys(byAction).length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-2 border-t border-gray-100">
+            <span className="text-[9px] text-gray-400 font-semibold tracking-wider mt-1 mr-1">TOP ACTIONS</span>
+            {Object.entries(byAction).slice(0, 8).map(([act, n]) => (
+              <button
+                key={act}
+                onClick={() => setActionFilter(actionFilter === act ? "" : act)}
+                className={`text-[10px] font-mono rounded-full px-2 py-0.5 transition-colors ${
+                  actionFilter === act ? "bg-rose-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {act} <span className="opacity-60">{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Log table */}
+      <section className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="grid grid-cols-12 gap-3 px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+          <p className="col-span-2 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">When</p>
+          <p className="col-span-2 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Actor</p>
+          <p className="col-span-2 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Action</p>
+          <p className="col-span-3 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Target</p>
+          <p className="col-span-3 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Details</p>
+        </div>
+        {loading && <p className="px-4 py-6 text-[12px] text-gray-400">Loading audit log…</p>}
+        {!loading && entries.length === 0 && (
+          <p className="px-4 py-6 text-[12px] text-gray-400 italic">
+            {data?.total === 0 ? "No actions audited yet. Try changing a user's role or running a CSV import to see the log populate." : "No entries match the filter."}
+          </p>
+        )}
+        {!loading && entries.map((e) => (
+          <div key={e.audit_id} className="grid grid-cols-12 gap-3 px-4 py-2 border-b border-gray-50 last:border-0 items-center hover:bg-gray-50/40">
+            <p className="col-span-2 text-[10px] text-gray-500 font-mono">{fmtAuditTime(e.timestamp)}</p>
+            <div className="col-span-2 min-w-0">
+              <p className="text-[11px] font-semibold text-text-primary truncate">{e.actor_user_id}</p>
+              {e.actor_role && <p className="text-[9px] text-gray-400">{e.actor_role}</p>}
+            </div>
+            <p className="col-span-2 text-[10px] font-mono text-rose-700 truncate">{e.action}</p>
+            <p className="col-span-3 text-[10px] font-mono text-gray-700 truncate">{e.target || <span className="text-gray-400 italic">—</span>}</p>
+            <p className="col-span-3 text-[10px] text-gray-600 truncate font-mono">
+              {e.details && Object.keys(e.details).length > 0
+                ? Object.entries(e.details).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(" ")
+                : <span className="text-gray-400 italic">—</span>}
+            </p>
+          </div>
+        ))}
+      </section>
+    </>
+  );
+}
+
+function fmtAuditTime(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) {
+      return `Today ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+    }
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
 }
 
 function ResultStat({ label, value, tone = "neutral" }) {

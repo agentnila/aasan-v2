@@ -685,6 +685,29 @@ export async function adminImportUsersCsv(actorUserId, csvText) {
   } catch (err) { return { error: err.message } }
 }
 
+export async function adminAuditLog(actorUserId, filters = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/audit_log`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify(filters),
+    })
+    if (res.status === 403) return { error: 'forbidden', entries: [], total: 0 }
+    return await res.json()
+  } catch (err) { return { error: err.message, entries: [], total: 0 } }
+}
+
+export async function adminAuditLogExportCsv(actorUserId, filters = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/audit_log/export_csv`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify(filters),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, csv: '' } }
+}
+
 export async function adminUsersCsvSample(actorUserId) {
   try {
     const res = await fetch(`${RENDER_URL}/admin/users/csv_sample`, {
@@ -1356,6 +1379,8 @@ const agent = {
   adminUpdateUser,
   adminImportUsersCsv,
   adminUsersCsvSample,
+  adminAuditLog,
+  adminAuditLogExportCsv,
   registerSME,
   getSMEProfile,
   listSMEs,

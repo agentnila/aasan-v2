@@ -633,6 +633,59 @@ export async function findSMESlots(smeId, learnerId, { durationMin = 30, count =
 }
 
 // ─────────────────────────────────────────────
+// RBAC + ADMIN CONSOLE — Internal Pilot Pack
+// ─────────────────────────────────────────────
+
+export async function getMe(userId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/me`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': userId || 'demo-user' },
+      body: JSON.stringify({ user_id: userId || 'demo-user' }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, role: 'learner', is_admin: false, modules: [] }
+  }
+}
+
+export async function adminListUsers(actorUserId, { filterRole, search, limit = 200 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/users/list`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ filter_role: filterRole, search, limit }),
+    })
+    if (res.status === 403) return { error: 'forbidden', users: [], count: 0 }
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, users: [], count: 0 }
+  }
+}
+
+export async function adminSetRole(actorUserId, targetUserId, role) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/users/set_role`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ target_user_id: targetUserId, role }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function adminUpdateUser(actorUserId, targetUserId, fields) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/users/update`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ target_user_id: targetUserId, fields }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+// ─────────────────────────────────────────────
 // TEAM MODULE — manager view of team learning progress
 // ─────────────────────────────────────────────
 
@@ -1264,6 +1317,10 @@ const agent = {
   listTeam,
   getTeamMember,
   sendTeamKudos,
+  getMe,
+  adminListUsers,
+  adminSetRole,
+  adminUpdateUser,
   registerSME,
   getSMEProfile,
   listSMEs,

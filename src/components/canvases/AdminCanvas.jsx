@@ -1,0 +1,266 @@
+import { useEffect, useMemo, useState } from "react";
+import { useUser } from "@clerk/clerk-react";
+import agent from "../../services/agentService";
+
+/**
+ * Admin Console — Internal Pilot Pack · Phase A.
+ *
+ * Routed via the Settings cog at the bottom of ModuleRail (NOT a top-level
+ * rail icon — keeps the rail at 7 modules per the IA memory). Only loads
+ * for users with the `org_admin` role; everyone else gets a 403-style
+ * "you don't have access" surface.
+ *
+ * V1 scope: People tab only. Modules / SSO / Branding / Billing are
+ * sibling tabs reserved for following ships.
+ */
+
+const ROLE_LABELS = {
+  learner:          { label: "Learner",          tone: "bg-gray-100 text-gray-700" },
+  manager:          { label: "Manager",          tone: "bg-amber-100 text-amber-700" },
+  skip_manager:     { label: "Skip-level",       tone: "bg-amber-50 text-amber-600" },
+  ld_admin:         { label: "L&D Admin",        tone: "bg-blue-100 text-blue-700" },
+  compliance_admin: { label: "Compliance Admin", tone: "bg-violet-100 text-violet-700" },
+  org_admin:        { label: "Org Admin",        tone: "bg-rose-100 text-rose-700" },
+  super_admin:      { label: "Super Admin",      tone: "bg-rose-200 text-rose-800" },
+};
+const ALL_ROLES = Object.keys(ROLE_LABELS);
+
+export default function AdminCanvas() {
+  const { user } = useUser();
+  const actorId = user?.id || "demo-user";
+
+  const [me, setMe] = useState(null);
+  const [users, setUsers] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("people");
+  const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  async function loadMe() {
+    const data = await agent.getMe(actorId);
+    setMe(data);
+  }
+  async function loadUsers() {
+    setLoading(true);
+    const data = await agent.adminListUsers(actorId, { filterRole, search });
+    setUsers(data);
+    setLoading(false);
+  }
+
+  useEffect(() => { loadMe(); }, []);
+  useEffect(() => { if (me?.is_admin) loadUsers(); }, [me, filterRole, search]);
+
+  async function handleSetRole(target, newRole) {
+    setBusyId(target.user_id);
+    await agent.adminSetRole(actorId, target.user_id, newRole);
+    await loadUsers();
+    setBusyId(null);
+  }
+
+  // 403-style surface — non-admins still see the canvas (we routed them here)
+  if (me && !me.is_admin) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm max-w-2xl">
+        <div className="text-[40px] mb-2">🔒</div>
+        <h1 className="text-[22px] font-bold text-text-primary tracking-tight mb-1">Admin Console</h1>
+        <p className="text-[13px] text-gray-500 leading-relaxed mb-3">
+          You don't have access to this surface.
+        </p>
+        <p className="text-[12px] text-gray-700">
+          Your role is <span className="font-semibold">{ROLE_LABELS[me.role]?.label || me.role}</span>. The Admin Console is reserved for <span className="font-semibold">Org Admin</span> + <span className="font-semibold">Super Admin</span>. Ping your IT administrator if you need access.
+        </p>
+      </div>
+    );
+  }
+
+  const list = users?.users || [];
+  const filtered = list;
+  const byRole = users?.by_role || {};
+
+  return (
+    <div className="space-y-5">
+      <header>
+        <div className="flex items-baseline gap-3 mb-1">
+          <h1 className="text-[24px] font-bold text-text-primary tracking-tight">⚙ Admin Console</h1>
+          <span className="text-[11px] text-gray-400">Internal Pilot Pack — Job-1 deployment</span>
+          {me && (
+            <span className="ml-auto text-[10px] text-gray-500">
+              Signed in as <span className="font-semibold text-text-primary">{me.name}</span> · <span className={`text-[9px] rounded-full px-1.5 py-0.5 font-medium ${ROLE_LABELS[me.role]?.tone || "bg-gray-100"}`}>{ROLE_LABELS[me.role]?.label || me.role}</span>
+            </span>
+          )}
+        </div>
+        <p className="text-[13px] text-gray-500 leading-relaxed max-w-2xl">
+          People · roles · modules · SSO · branding · audit log. V1 ships People; the rest follow as the Internal Pilot Pack continues.
+        </p>
+      </header>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-gray-200">
+        <Tab active={tab === "people"}   onClick={() => setTab("people")}   label="👥 People"   count={users?.total} />
+        <Tab active={tab === "modules"}  onClick={() => setTab("modules")}  label="📦 Modules"  badge="soon" />
+        <Tab active={tab === "sso"}      onClick={() => setTab("sso")}      label="🔐 SSO"       badge="soon" />
+        <Tab active={tab === "branding"} onClick={() => setTab("branding")} label="🎨 Branding"  badge="soon" />
+        <Tab active={tab === "billing"}  onClick={() => setTab("billing")}  label="💳 Billing"   badge="soon" />
+        <Tab active={tab === "audit"}    onClick={() => setTab("audit")}    label="📋 Audit log" badge="soon" />
+      </div>
+
+      {tab === "people" && (
+        <>
+          {/* Stats strip */}
+          <section className="grid grid-cols-4 gap-3">
+            <Stat label="Total users" value={users?.total ?? "—"} />
+            <Stat label="Org admins" value={byRole.org_admin || 0} />
+            <Stat label="Managers" value={(byRole.manager || 0) + (byRole.skip_manager || 0)} />
+            <Stat label="Learners" value={byRole.learner || 0} />
+          </section>
+
+          {/* Filters */}
+          <section className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name or email…"
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-rose-400"
+              />
+              <select
+                value={filterRole || ""}
+                onChange={(e) => setFilterRole(e.target.value || null)}
+                className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-rose-400 bg-white"
+              >
+                <option value="">All roles</option>
+                {ALL_ROLES.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r].label}</option>
+                ))}
+              </select>
+              <button
+                disabled
+                className="text-[11px] font-semibold bg-gray-100 text-gray-400 rounded-md px-2.5 py-2 cursor-not-allowed"
+                title="CSV import — Phase A.2"
+              >
+                📥 CSV import (soon)
+              </button>
+              <button
+                disabled
+                className="text-[11px] font-semibold bg-gray-100 text-gray-400 rounded-md px-2.5 py-2 cursor-not-allowed"
+                title="Invite user — Phase A.2"
+              >
+                + Invite (soon)
+              </button>
+            </div>
+          </section>
+
+          {/* People table */}
+          <section className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="grid grid-cols-12 gap-3 px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+              <p className="col-span-3 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">User</p>
+              <p className="col-span-3 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Email</p>
+              <p className="col-span-2 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Department</p>
+              <p className="col-span-2 text-[9px] font-semibold text-gray-400 tracking-wider uppercase">Role</p>
+              <p className="col-span-2 text-[9px] font-semibold text-gray-400 tracking-wider uppercase text-right">Last active</p>
+            </div>
+            {loading && <p className="px-4 py-6 text-[12px] text-gray-400">Loading users…</p>}
+            {!loading && filtered.length === 0 && (
+              <p className="px-4 py-6 text-[12px] text-gray-400 italic">No users match.</p>
+            )}
+            {!loading && filtered.map((u) => {
+              const meta = ROLE_LABELS[u.role] || { label: u.role, tone: "bg-gray-100 text-gray-700" };
+              const isSelf = u.user_id === actorId;
+              const initials = (u.name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+              return (
+                <div key={u.user_id} className="grid grid-cols-12 gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0 items-center hover:bg-gray-50/40">
+                  <div className="col-span-3 flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-[10px] font-bold shrink-0">{initials}</div>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-text-primary truncate">{u.name}{isSelf && <span className="ml-1 text-[9px] text-gray-400 font-normal">(you)</span>}</p>
+                      <p className="text-[9px] text-gray-400 font-mono truncate">{u.user_id}</p>
+                    </div>
+                  </div>
+                  <p className="col-span-3 text-[11px] text-gray-700 truncate">{u.email}</p>
+                  <p className="col-span-2 text-[11px] text-gray-700 truncate">{u.department || <span className="text-gray-400 italic">—</span>}</p>
+                  <div className="col-span-2 flex items-center gap-1.5">
+                    <span className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${meta.tone}`}>{meta.label}</span>
+                    <select
+                      value={u.role}
+                      onChange={(e) => handleSetRole(u, e.target.value)}
+                      disabled={busyId === u.user_id || isSelf}
+                      title={isSelf ? "You can't change your own role" : "Change role"}
+                      className="text-[10px] rounded-md border border-gray-200 bg-white px-1.5 py-0.5 focus:outline-none focus:border-rose-400 disabled:opacity-40"
+                    >
+                      {ALL_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r].label}</option>)}
+                    </select>
+                  </div>
+                  <p className="col-span-2 text-[10px] text-gray-500 text-right truncate">{fmtRelativeDate(u.last_active_at)}</p>
+                </div>
+              );
+            })}
+          </section>
+        </>
+      )}
+
+      {tab !== "people" && (
+        <SoonStub tab={tab} />
+      )}
+    </div>
+  );
+}
+
+function Tab({ active, onClick, label, count, badge }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={!!badge}
+      className={`text-[12px] font-semibold px-4 py-2.5 transition-all border-b-2 ${
+        active ? "border-rose-600 text-rose-700"
+          : badge ? "border-transparent text-gray-400 cursor-not-allowed"
+          : "border-transparent text-gray-500 hover:text-gray-700"
+      }`}
+    >
+      {label}
+      {count != null && <span className="opacity-60 ml-1">{count}</span>}
+      {badge && <span className="ml-1.5 text-[8px] uppercase tracking-wider bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5">{badge}</span>}
+    </button>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+      <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-0.5 uppercase">{label}</p>
+      <p className="text-[22px] font-bold text-text-primary leading-none">{value}</p>
+    </div>
+  );
+}
+
+function SoonStub({ tab }) {
+  const labels = {
+    modules:  { icon: "📦", title: "Modules",   pitch: "Toggle modules per role and per SKU. Resume-only users won't see Library / Marketplace icons; full-suite users see everything. Wires the rail's icon visibility to the user's plan." },
+    sso:      { icon: "🔐", title: "SSO",       pitch: "Okta SAML metadata · allowed domains · session policies · IP allowlists. Ships with SCIM provisioning so adding/removing 500 users is one config in Okta." },
+    branding: { icon: "🎨", title: "Branding",   pitch: "Workspace name · logo · primary color · email-from address. Slack-style — minor visual polish that makes the app feel like the customer's own." },
+    billing:  { icon: "💳", title: "Billing",    pitch: "Seat count + plan + invoices via Stripe. Per-SKU pricing (Resume / Stay Ahead / Library / Career OS) once external buyers come — internal pilot doesn't need this yet." },
+    audit:    { icon: "📋", title: "Audit log",  pitch: "Immutable log of who did what, when. Searchable + exportable as CSV. Foundation for SOC 2 even though we're not auditing yet." },
+  }[tab] || { icon: "🔧", title: tab, pitch: "Coming next." };
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+      <div className="text-[28px] mb-1.5">{labels.icon}</div>
+      <p className="text-[16px] font-bold text-text-primary mb-1">{labels.title}</p>
+      <p className="text-[12px] text-gray-600 leading-relaxed">{labels.pitch}</p>
+      <p className="text-[10px] text-gray-400 italic mt-3">Internal Pilot Pack · landing in the next 2 weeks.</p>
+    </div>
+  );
+}
+
+function fmtRelativeDate(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    const today = new Date();
+    const diffDays = Math.round((today - d) / 86400000);
+    if (diffDays <= 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch { return iso; }
+}

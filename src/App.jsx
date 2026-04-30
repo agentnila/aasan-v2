@@ -10,6 +10,7 @@ import StayAheadCanvas from './components/canvases/StayAheadCanvas'
 import ResumeCanvas from './components/canvases/ResumeCanvas'
 import MarketplaceCanvas from './components/canvases/MarketplaceCanvas'
 import TeamCanvas from './components/canvases/TeamCanvas'
+import AdminCanvas from './components/canvases/AdminCanvas'
 import { loadContext } from './services/api'
 
 /**
@@ -72,6 +73,7 @@ function AasanApp() {
         <Route path="/resume" element={<ModuleShell module="resume"><ResumeCanvas /></ModuleShell>} />
         <Route path="/marketplace" element={<ModuleShell module="marketplace"><MarketplaceCanvas /></ModuleShell>} />
         <Route path="/team" element={<ModuleShell module="team"><TeamCanvas /></ModuleShell>} />
+        <Route path="/admin" element={<ModuleShell module="admin"><AdminCanvas /></ModuleShell>} />
         {/* Catch-all → Kudil */}
         <Route path="*" element={<ModuleShell module="kudil" />} />
       </Routes>

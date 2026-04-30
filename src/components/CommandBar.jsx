@@ -25,7 +25,8 @@ const COMMANDS = [
 
   // Actions
   { kind: "action", icon: "💬", label: "Ask Peraasan",         hint: "Open the agent chat",      action: "openChat" },
-  { kind: "action", icon: "✍",  label: "Log a work entry",     hint: "Resume · Service Record",   to: "/resume" },
+  { kind: "action", icon: "✍",  label: "Log a work entry",     hint: "Resume · Service Record",   to: "/resume?action=add-entry" },
+  { kind: "action", icon: "📝", label: "Tailor resume to a JD", hint: "Resume · paste a job description", to: "/resume?action=tailor" },
   { kind: "action", icon: "🛠", label: "Post a gig",           hint: "Marketplace · Gigs",        to: "/marketplace?tab=gigs&view=post" },
   { kind: "action", icon: "🎯", label: "Create a goal",        hint: "Paths",                     to: "/paths?action=create-goal" },
   { kind: "action", icon: "⚙", label: "Run Currency Watch",   hint: "Stay Ahead · scan tracked sources", to: "/stay-ahead?action=currency-scan" },

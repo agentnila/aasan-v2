@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
+import { useSearchParams } from "react-router-dom";
 import agent from "../../services/agentService";
 
 /**
@@ -30,6 +31,7 @@ const STEP_TYPE_LABEL = {
 export default function PathsCanvas() {
   const { user } = useUser();
   const userId = user?.id || "demo-user";
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [goals, setGoals] = useState([]);
   const [activeGoalId, setActiveGoalId] = useState(null);
@@ -41,6 +43,18 @@ export default function PathsCanvas() {
   const [stepBusy, setStepBusy] = useState(null);
   const [reorderingStep, setReorderingStep] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
+  const [addGoalOpen, setAddGoalOpen] = useState(false);
+
+  // Honor ?action=create-goal deep-link (from CommandBar / direct URL)
+  useEffect(() => {
+    if (searchParams.get("action") === "create-goal") {
+      setAddGoalOpen(true);
+      // Clear the param so back-nav doesn't re-open
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   async function loadGoals() {
     setLoading(true);
@@ -120,8 +134,17 @@ export default function PathsCanvas() {
     await loadGoals();
     setRecomputing(false);
   }
-  async function handleStartAddGoal() {
-    window.dispatchEvent(new CustomEvent("aasan:start-add-goal"));
+  function handleStartAddGoal() {
+    setAddGoalOpen(true);
+  }
+
+  async function handleCreateGoal(profile) {
+    const result = await agent.createGoal(userId, profile);
+    if (result?.error) return { error: result.error };
+    await loadGoals();
+    if (result?.goal?.id) setActiveGoalId(result.goal.id);
+    setAddGoalOpen(false);
+    return { ok: true, goal: result?.goal };
   }
 
   return (
@@ -364,7 +387,161 @@ export default function PathsCanvas() {
           </div>
         </section>
       )}
+
+      {addGoalOpen && (
+        <AddGoalModal
+          onClose={() => setAddGoalOpen(false)}
+          onCreate={handleCreateGoal}
+        />
+      )}
     </div>
+  );
+}
+
+function AddGoalModal({ onClose, onCreate }) {
+  const [name, setName] = useState("");
+  const [objective, setObjective] = useState("");
+  const [timeline, setTimeline] = useState("");
+  const [successCriteria, setSuccessCriteria] = useState("");
+  const [priority, setPriority] = useState("primary");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Esc closes
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape") onClose(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!name.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const result = await onCreate({
+      name: name.trim(),
+      objective: objective.trim(),
+      timeline: timeline.trim(),
+      success_criteria: successCriteria.trim(),
+      priority,
+    });
+    setSubmitting(false);
+    if (result?.error) setError(result.error);
+    // onClose handled by parent on success
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-[10vh]"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-[560px] max-w-[92vw] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-green-700">🎯 NEW GOAL</p>
+            <p className="text-[14px] font-bold text-text-primary mt-0.5">What are you working toward?</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-[18px]" title="Close (Esc)">✕</button>
+        </div>
+
+        <form onSubmit={submit} className="p-5 space-y-4">
+          <Field label="Goal name" required>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Become a Cloud Architect"
+              className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400"
+              required
+            />
+          </Field>
+
+          <Field label="Why this goal? (objective)" hint="One sentence on the outcome you want.">
+            <textarea
+              value={objective}
+              onChange={(e) => setObjective(e.target.value)}
+              placeholder="Lead our team's cloud migration and get promoted to Staff Engineer."
+              rows={2}
+              className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400 resize-none"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Timeline" hint="When do you want this done?">
+              <input
+                value={timeline}
+                onChange={(e) => setTimeline(e.target.value)}
+                placeholder="Q4 2026"
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400"
+              />
+            </Field>
+            <Field label="Priority">
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400 bg-white"
+              >
+                <option value="primary">Primary — main focus</option>
+                <option value="assigned">Assigned — required of me</option>
+                <option value="exploration">Exploration — curious about it</option>
+              </select>
+            </Field>
+          </div>
+
+          <Field label="What does done look like? (success criteria)" hint="The Path Engine uses this to know when you're ready.">
+            <textarea
+              value={successCriteria}
+              onChange={(e) => setSuccessCriteria(e.target.value)}
+              placeholder="Lead a multi-region production migration. Get promoted to Staff Engineer."
+              rows={2}
+              className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400 resize-none"
+            />
+          </Field>
+
+          {error && <p className="text-[11px] text-red-600">{error}</p>}
+
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+            <p className="text-[10px] text-gray-400">The Path Engine builds your live path next — you can edit it any time.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-[12px] text-gray-600 hover:text-gray-900 px-3 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!name.trim() || submitting}
+                className={`text-[12px] font-semibold rounded-md px-4 py-2 transition-colors ${
+                  !name.trim() || submitting
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    : "bg-green-600 text-white hover:bg-green-700"
+                }`}
+              >
+                {submitting ? "Creating…" : "Create goal →"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, required, children }) {
+  return (
+    <label className="block">
+      <span className="text-[11px] font-semibold text-gray-700 block mb-1">
+        {label}{required && <span className="text-rose-500"> *</span>}
+      </span>
+      {children}
+      {hint && <span className="text-[10px] text-gray-400 mt-1 block">{hint}</span>}
+    </label>
   );
 }
 

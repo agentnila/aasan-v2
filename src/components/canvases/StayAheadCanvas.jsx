@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
+import { useSearchParams } from "react-router-dom";
 import agent from "../../services/agentService";
 
 /**
@@ -23,12 +24,27 @@ const BAND_TONE = {
 export default function StayAheadCanvas() {
   const { user } = useUser();
   const userId = user?.id || "demo-user";
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(null); // 'scan' | 'currency' | 'career' | 'scenario' | null
   const [predigestUrl, setPredigestUrl] = useState("");
   const [predigesting, setPredigesting] = useState(false);
   const [predigestResult, setPredigestResult] = useState(null);
+
+  // Honor ?action=currency-scan / career-scan / scenario deep-links from CommandBar
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const map = { "currency-scan": "currency", "career-scan": "career", "scenario": "scenario" };
+    if (map[action]) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+      // Defer until first render so dispatchAction (defined below) is in scope
+      setTimeout(() => dispatchAction(map[action]), 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadStayAhead() {
     setLoading(true);

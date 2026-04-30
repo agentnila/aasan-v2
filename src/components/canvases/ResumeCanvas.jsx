@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
+import { useSearchParams } from "react-router-dom";
 import agent from "../../services/agentService";
 
 /**
@@ -34,9 +35,31 @@ export default function ResumeCanvas() {
   const { user } = useUser();
   const userId = user?.id || "demo-user";
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState("record"); // 'record' | 'tailor'
   const [journal, setJournal] = useState(null);
   const [loading, setLoading] = useState(true);
+  const addRef = useRef(null);
+
+  // Honor ?action=add-entry / tailor — focus the relevant surface on mount
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action === "add-entry") {
+      setTab("record");
+      setTimeout(() => {
+        addRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        addRef.current?.focus();
+      }, 50);
+    } else if (action === "tailor") {
+      setTab("tailor");
+    }
+    if (action) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("action");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Add-entry form state
   const [addingText, setAddingText] = useState("");
@@ -156,6 +179,7 @@ export default function ResumeCanvas() {
           <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
             <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-2">✍ LOG A WORK ENTRY</p>
             <textarea
+              ref={addRef}
               value={addingText}
               onChange={(e) => setAddingText(e.target.value)}
               disabled={adding}

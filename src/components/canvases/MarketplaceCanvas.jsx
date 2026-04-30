@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
+import { useSearchParams } from "react-router-dom";
 import agent from "../../services/agentService";
 
 /**
@@ -18,7 +19,21 @@ import agent from "../../services/agentService";
 export default function MarketplaceCanvas() {
   const { user } = useUser();
   const userId = user?.id || "demo-user";
-  const [tab, setTab] = useState("browse");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = ["browse", "bookings", "gigs"].includes(searchParams.get("tab"))
+    ? searchParams.get("tab") : "browse";
+  const [tab, setTab] = useState(initialTab);
+
+  // Strip the URL params after first read so back-nav doesn't re-trigger
+  useEffect(() => {
+    if (searchParams.get("tab") || searchParams.get("view")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      // keep `view` for the GigsTab to read on its first mount
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-5">
@@ -448,7 +463,19 @@ const POINT_TIERS = [
 ];
 
 function GigsTab({ userId }) {
-  const [view, setView] = useState("browse"); // browse | post | mine
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialView = ["browse", "post", "mine"].includes(searchParams.get("view"))
+    ? searchParams.get("view") : "browse";
+  const [view, setView] = useState(initialView);
+  // Clear ?view after consuming so back-nav behaves
+  useEffect(() => {
+    if (searchParams.get("view")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("view");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [data, setData] = useState(null);
   const [points, setPoints] = useState(null);
   const [myPosts, setMyPosts] = useState([]);

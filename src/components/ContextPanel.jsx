@@ -1,4 +1,88 @@
+import { useEffect, useState } from 'react'
 import { useUser, UserButton } from '@clerk/clerk-react'
+import agent from '../services/agentService'
+
+function FeedEvent({ ev, authorEmail }) {
+  const [endorsing, setEndorsing] = useState(false)
+  const [done, setDone] = useState(false)
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('')
+  const [comment, setComment] = useState('')
+  const [showForm, setShowForm] = useState(false)
+
+  async function submitEndorsement() {
+    setEndorsing(true)
+    const result = await agent.endorseEntry({
+      authorUserId: ev.from_user_id,
+      entryId: ev.entry_id,
+      endorserEmail: authorEmail,
+      endorserName: name,
+      endorserRole: role,
+      comment,
+    })
+    if (!result?.error) setDone(true)
+    setEndorsing(false)
+  }
+
+  if (ev.type === 'shared_entry') {
+    return (
+      <div className="px-2 py-1.5 rounded-md border border-gray-100 bg-blue-50/30">
+        <p className="text-[10px] text-blue-700 font-semibold tracking-wider mb-0.5">📤 SHARED WITH YOU</p>
+        <p className="text-[11px] font-medium text-text-primary leading-snug">{ev.entry_title}</p>
+        <p className="text-[9px] text-gray-500 mt-0.5">
+          from {ev.from_user_id}
+          {ev.entry_company && ` · 🏢 ${ev.entry_company}`}
+          {ev.entry_project && ` · 📁 ${ev.entry_project}`}
+        </p>
+        {(ev.entry_outcomes || []).slice(0, 1).map((o, i) => (
+          <p key={i} className="text-[10px] text-gray-600 mt-1 italic">"· {o}"</p>
+        ))}
+      </div>
+    )
+  }
+  if (ev.type === 'endorsement_requested') {
+    return (
+      <div className="px-2 py-1.5 rounded-md border border-amber-200 bg-amber-50/40">
+        <p className="text-[10px] text-amber-700 font-semibold tracking-wider mb-0.5">⭐ ENDORSEMENT REQUEST</p>
+        <p className="text-[11px] font-medium text-text-primary leading-snug">{ev.entry_title}</p>
+        <p className="text-[9px] text-gray-500 mt-0.5">
+          from {ev.from_user_id}
+          {ev.entry_company && ` · 🏢 ${ev.entry_company}`}
+        </p>
+        {done ? (
+          <p className="text-[10px] text-emerald-700 mt-1 font-semibold">✓ Endorsed</p>
+        ) : showForm ? (
+          <div className="mt-2 space-y-1.5">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className="w-full px-2 py-1 rounded border border-amber-200 text-[10px]" />
+            <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Your role/title" className="w-full px-2 py-1 rounded border border-amber-200 text-[10px]" />
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Optional comment…" rows={2} className="w-full px-2 py-1 rounded border border-amber-200 text-[10px] resize-none" />
+            <div className="flex gap-1.5">
+              <button onClick={submitEndorsement} disabled={endorsing || !name.trim()} className={`flex-1 text-[10px] font-semibold rounded-md py-1 ${endorsing || !name.trim() ? 'bg-amber-200 text-amber-400' : 'bg-amber-600 text-white hover:bg-amber-700'}`}>
+                {endorsing ? 'Submitting…' : '✓ Endorse'}
+              </button>
+              <button onClick={() => setShowForm(false)} className="text-[10px] text-gray-500 hover:text-gray-700 px-2">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setShowForm(true)} className="mt-1.5 text-[10px] font-semibold bg-amber-600 text-white hover:bg-amber-700 rounded-md px-2 py-1">
+            ⭐ Endorse →
+          </button>
+        )}
+      </div>
+    )
+  }
+  if (ev.type === 'endorsement_received') {
+    return (
+      <div className="px-2 py-1.5 rounded-md border border-emerald-200 bg-emerald-50/40">
+        <p className="text-[10px] text-emerald-700 font-semibold tracking-wider mb-0.5">✓ ENDORSED YOU</p>
+        <p className="text-[11px] font-medium text-text-primary leading-snug">{ev.from_user_name || ev.from_user_email}{ev.from_user_role && <span className="font-normal text-gray-500"> · {ev.from_user_role}</span>}</p>
+        <p className="text-[10px] text-gray-500 mt-0.5">on "{ev.entry_title}"</p>
+        {ev.comment && <p className="text-[10px] text-gray-700 italic mt-1">"{ev.comment}"</p>}
+      </div>
+    )
+  }
+  return null
+}
 
 function getSavedGoal() {
   try {
@@ -34,6 +118,29 @@ export default function ContextPanel({ data, context, contextLoading }) {
   const _memories = context?.memories || []
   const upcomingBlocks = context?.schedule?.upcoming || []
   const conflictPending = context?.schedule?.conflict_pending || []
+
+  // Resume activity feed (peer events: shared / endorsement_requested / endorsement_received)
+  const [feedEvents, setFeedEvents] = useState([])
+  const [feedLoading, setFeedLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!email) { setFeedLoading(false); return }
+    agent.getResumeFeed(email, { limit: 8 }).then((result) => {
+      if (cancelled) return
+      setFeedEvents(result?.events || [])
+      setFeedLoading(false)
+    })
+    // Refresh every 30s
+    const t = setInterval(() => {
+      if (cancelled) return
+      agent.getResumeFeed(email, { limit: 8 }).then((result) => {
+        if (cancelled) return
+        setFeedEvents(result?.events || [])
+      })
+    }, 30000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [email])
 
   // Goal from localStorage (set during onboarding)
   const savedGoal = getSavedGoal()
@@ -115,6 +222,25 @@ export default function ContextPanel({ data, context, contextLoading }) {
           </div>
         </div>
       )}
+
+      {/* Activity feed — peer events from Resume Service Record */}
+      <div className="px-5 py-4 border-b border-gray-50">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[9px] text-gray-400 font-semibold tracking-wider">📡 ACTIVITY FEED</p>
+          {feedEvents.length > 0 && (
+            <span className="text-[9px] text-gray-400 font-mono">{feedEvents.length}</span>
+          )}
+        </div>
+        {feedLoading && <p className="text-[10px] text-gray-400 italic">Loading…</p>}
+        {!feedLoading && feedEvents.length === 0 && (
+          <p className="text-[10px] text-gray-400 italic leading-relaxed">
+            No peer activity yet. When a peer shares an entry or asks for your endorsement, it shows up here.
+          </p>
+        )}
+        <div className="space-y-2">
+          {feedEvents.map((ev) => <FeedEvent key={ev.feed_id} ev={ev} authorEmail={email} />)}
+        </div>
+      </div>
 
       {/* Upcoming learning blocks (V3 — Project Manager Mode) */}
       {(upcomingBlocks.length > 0 || conflictPending.length > 0) && (

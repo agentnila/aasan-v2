@@ -36,8 +36,9 @@ export function ModuleLayout({
 
   return (
     <>
-      {/* Module pane — filtered SourcesNav showing only this module's sections */}
-      <SourcesNav module={module} />
+      {/* Module pane — only on Kudil. Non-Kudil modules host actions inside
+          the canvas itself, so the filtered SourcesNav was redundant. */}
+      {isKudil && <SourcesNav module={module} />}
 
       {/* Canvas — chat for Kudil, stub for everything else (Phase 2 fills in) */}
       {isKudil ? (

@@ -237,6 +237,50 @@ export async function addJournalEntry(userId, rawInput, structured) {
   }
 }
 
+export async function shareEntry(userId, entryId, peerEmails) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/share`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ user_id: userId, entry_id: entryId, peer_emails: peerEmails || [] }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function requestEndorsements(userId, entryId, peerEmails) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/request_endorsements`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ user_id: userId, entry_id: entryId, peer_emails: peerEmails || [] }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function endorseEntry({ authorUserId, entryId, endorserEmail, endorserName, endorserRole, comment }) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/endorse`, {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        author_user_id: authorUserId, entry_id: entryId,
+        endorser_email: endorserEmail, endorser_name: endorserName,
+        endorser_role: endorserRole, comment,
+      }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message } }
+}
+
+export async function getResumeFeed(userEmail, { limit = 25 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/resume/feed`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ user_email: userEmail, limit }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, events: [], count: 0 } }
+}
+
 export async function listJournal(userId, limit = 50) {
   try {
     const res = await fetch(`${RENDER_URL}/resume/journal`, {
@@ -1188,6 +1232,10 @@ const agent = {
   addJournalEntry,
   listJournal,
   tailorResume,
+  shareEntry,
+  requestEndorsements,
+  endorseEntry,
+  getResumeFeed,
 }
 
 export default agent

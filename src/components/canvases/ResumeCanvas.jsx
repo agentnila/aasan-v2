@@ -41,6 +41,10 @@ export default function ResumeCanvas() {
   // Add-entry form state
   const [addingText, setAddingText] = useState("");
   const [adding, setAdding] = useState(false);
+  const [companyField, setCompanyField] = useState("");
+  const [projectField, setProjectField] = useState("");
+  const [shareEmails, setShareEmails] = useState("");
+  const [endorseEmails, setEndorseEmails] = useState("");
 
   // Search + filter
   const [query, setQuery] = useState("");
@@ -65,8 +69,19 @@ export default function ResumeCanvas() {
     const text = addingText.trim();
     if (!text) return;
     setAdding(true);
-    await agent.addJournalEntry(userId, text);
+    const peers_to_share_with = shareEmails.split(",").map(e => e.trim()).filter(Boolean);
+    const peers_to_endorse   = endorseEmails.split(",").map(e => e.trim()).filter(Boolean);
+    await agent.addJournalEntry(userId, text, {
+      company: companyField.trim(),
+      project: projectField.trim(),
+      peers_to_share_with,
+      peers_to_endorse,
+    });
     setAddingText("");
+    setCompanyField("");
+    setProjectField("");
+    setShareEmails("");
+    setEndorseEmails("");
     await loadJournal();
     setAdding(false);
   }
@@ -145,15 +160,66 @@ export default function ResumeCanvas() {
               onChange={(e) => setAddingText(e.target.value)}
               disabled={adding}
               rows={3}
-              placeholder='e.g. "Just shipped the new caching layer. Reduced p95 latency from 200ms to 80ms. Presented results to the platform team."'
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-emerald-400 resize-none"
+              placeholder='Tell Peraasan what you did. e.g. "Just shipped the new caching layer. Reduced p95 latency from 200ms to 80ms. Presented results to the platform team."'
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-emerald-400 resize-none mb-2"
             />
+
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-1">🏢 COMPANY</p>
+                <input
+                  type="text"
+                  value={companyField}
+                  onChange={(e) => setCompanyField(e.target.value)}
+                  disabled={adding}
+                  placeholder="e.g. TechCorp"
+                  className="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-[11px] focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-1">📁 PROJECT</p>
+                <input
+                  type="text"
+                  value={projectField}
+                  onChange={(e) => setProjectField(e.target.value)}
+                  disabled={adding}
+                  placeholder="e.g. Platform Reliability"
+                  className="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-[11px] focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-1">📤 SHARE WITH PEERS <span className="font-normal text-gray-400">(optional)</span></p>
+                <input
+                  type="text"
+                  value={shareEmails}
+                  onChange={(e) => setShareEmails(e.target.value)}
+                  disabled={adding}
+                  placeholder="comma-separated emails"
+                  className="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-[11px] focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-400 font-semibold tracking-wider mb-1">⭐ REQUEST ENDORSEMENT <span className="font-normal text-gray-400">(optional)</span></p>
+                <input
+                  type="text"
+                  value={endorseEmails}
+                  onChange={(e) => setEndorseEmails(e.target.value)}
+                  disabled={adding}
+                  placeholder="comma-separated emails"
+                  className="w-full px-2.5 py-1.5 rounded-md border border-gray-200 text-[11px] focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mt-2">
-              <p className="text-[10px] text-gray-400 italic">Claude extracts title, category, outcomes, technologies, and transferable skills automatically.</p>
+              <p className="text-[10px] text-gray-400 italic">Claude extracts title, category, outcomes, technologies, transferable skills. Endorsements + shares appear in your peers' feeds.</p>
               <button
                 onClick={handleAdd}
                 disabled={adding || !addingText.trim()}
-                className={`text-[12px] font-semibold rounded-md px-3 py-1.5 transition-colors ${
+                className={`text-[12px] font-semibold rounded-md px-3 py-1.5 transition-colors shrink-0 ml-3 ${
                   adding ? "bg-emerald-100 text-emerald-400 cursor-wait"
                     : !addingText.trim() ? "bg-emerald-200 text-emerald-400 cursor-not-allowed"
                     : "bg-emerald-600 text-white hover:bg-emerald-700"
@@ -235,6 +301,13 @@ export default function ResumeCanvas() {
                     </button>
                     {isOpen && (
                       <div className="ml-3 pl-3 mr-3 mb-3 mt-1 border-l-2 border-emerald-200 space-y-2">
+                        {(e.company || e.project) && (
+                          <p className="text-[10px] text-gray-500">
+                            {e.company && <span className="font-medium">🏢 {e.company}</span>}
+                            {e.company && e.project && <span> · </span>}
+                            {e.project && <span>📁 {e.project}</span>}
+                          </p>
+                        )}
                         {e.description && <p className="text-[11px] text-gray-700 leading-relaxed">{e.description}</p>}
                         {(e.outcomes || []).length > 0 && (
                           <div>
@@ -257,6 +330,34 @@ export default function ResumeCanvas() {
                               <span key={j} className="text-[9px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">{s}</span>
                             ))}
                           </div>
+                        )}
+                        {(e.endorsements || []).length > 0 && (
+                          <div className="border-t border-emerald-100 pt-2">
+                            <p className="text-[9px] font-semibold text-gray-400 tracking-wider mb-1">⭐ ENDORSEMENTS · {e.endorsements.length}</p>
+                            <div className="space-y-1">
+                              {e.endorsements.map((en, j) => {
+                                const approved = en.status === "approved";
+                                return (
+                                  <div key={j} className="flex items-start gap-2 text-[10px]">
+                                    <span className={`shrink-0 mt-0.5 ${approved ? "text-emerald-600" : "text-gray-400"}`}>
+                                      {approved ? "✓" : "⏳"}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className={approved ? "text-text-primary font-medium" : "text-gray-500"}>
+                                        {en.endorser_name || en.endorser_email}
+                                        {en.endorser_role && <span className="text-gray-400 font-normal"> · {en.endorser_role}</span>}
+                                      </p>
+                                      {en.comment && <p className="text-gray-600 italic mt-0.5">"{en.comment}"</p>}
+                                      {!approved && <p className="text-[9px] text-amber-600 mt-0.5">pending response</p>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {(e.shared_with || []).length > 0 && (
+                          <p className="text-[9px] text-gray-500">📤 Shared with: {e.shared_with.join(", ")}</p>
                         )}
                       </div>
                     )}

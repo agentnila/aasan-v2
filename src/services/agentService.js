@@ -711,14 +711,24 @@ export async function adminUpdateUser(actorUserId, targetUserId, fields) {
 // TEAM MODULE — manager view of team learning progress
 // ─────────────────────────────────────────────
 
-export async function listTeam(managerId) {
+export async function listTeam(managerId, { includeSkip = false } = {}) {
   try {
     const res = await fetch(`${RENDER_URL}/team/list`, {
       method: 'POST', headers,
-      body: JSON.stringify({ manager_id: managerId || 'demo-user' }),
+      body: JSON.stringify({ manager_id: managerId || 'demo-user', include_skip: includeSkip }),
     })
     return await res.json()
   } catch (err) { return { error: err.message, team: [], count: 0 } }
+}
+
+export async function getOrgChart(rootUserId = null) {
+  try {
+    const res = await fetch(`${RENDER_URL}/team/org_chart`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ root_user_id: rootUserId }),
+    })
+    return await res.json()
+  } catch (err) { return { error: err.message, tree: [] } }
 }
 
 export async function getTeamMember(managerId, memberId) {
@@ -1337,6 +1347,7 @@ const agent = {
   bookSMESlot,
   listMyBookings,
   listTeam,
+  getOrgChart,
   getTeamMember,
   sendTeamKudos,
   getMe,

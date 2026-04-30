@@ -28,19 +28,31 @@ export default function TeamCanvas() {
   const { user } = useUser();
   const managerId = user?.id || "demo-user";
 
+  const [tab, setTab] = useState("team"); // team | org_chart
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all"); // all | on_track | behind | exploring | mandatory | needs_attention
+  const [filter, setFilter] = useState("all"); // all | on_track | behind | exploring | mandatory | needs_attention | skip
   const [expandedId, setExpandedId] = useState(null);
+  const [includeSkip, setIncludeSkip] = useState(true);
+  const [orgChart, setOrgChart] = useState(null);
+  const [orgChartLoading, setOrgChartLoading] = useState(false);
 
   async function load() {
     setLoading(true);
-    const result = await agent.listTeam(managerId);
+    const result = await agent.listTeam(managerId, { includeSkip });
     setData(result);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  async function loadOrgChart() {
+    setOrgChartLoading(true);
+    const result = await agent.getOrgChart(managerId);
+    setOrgChart(result);
+    setOrgChartLoading(false);
+  }
+
+  useEffect(() => { load(); }, [includeSkip]);
+  useEffect(() => { if (tab === "org_chart" && !orgChart) loadOrgChart(); }, [tab]);
 
   const team = data?.team || [];
   const summary = data?.summary || {};
@@ -48,6 +60,8 @@ export default function TeamCanvas() {
   const filtered = useMemo(() => {
     if (filter === "all") return team;
     if (filter === "needs_attention") return team.filter((m) => m.manager_attention_flag);
+    if (filter === "skip") return team.filter((m) => m.is_skip);
+    if (filter === "direct") return team.filter((m) => !m.is_skip);
     return team.filter((m) => m.status === filter);
   }, [team, filter]);
 
@@ -59,10 +73,26 @@ export default function TeamCanvas() {
           <span className="text-[11px] text-gray-400">Your reports' learning + goal progress</span>
         </div>
         <p className="text-[13px] text-gray-500 leading-relaxed max-w-2xl">
-          See who's on track, who's stuck, and where to focus your 1-on-1 time. Send kudos · assign learning · spot at-risk goals before review season.
+          See who's on track, who's stuck, and where to focus your 1-on-1 time. Send kudos · assign learning · spot at-risk goals before review season. Org graph powered by the Department + Manager links from Admin Console.
         </p>
       </header>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-gray-200">
+        <TabBtn active={tab === "team"}      onClick={() => setTab("team")}      label="👥 My team" />
+        <TabBtn active={tab === "org_chart"} onClick={() => setTab("org_chart")} label="🌳 Org chart" />
+        {tab === "team" && (
+          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-500">
+            <input type="checkbox" checked={includeSkip} onChange={(e) => setIncludeSkip(e.target.checked)} />
+            Include skip-level reports
+          </label>
+        )}
+      </div>
+
+      {tab === "org_chart" ? (
+        <OrgChartView orgChart={orgChart} loading={orgChartLoading} />
+      ) : (
+      <>
       {/* Summary stats strip */}
       {!loading && team.length > 0 && (
         <section className="grid grid-cols-5 gap-3">
@@ -94,6 +124,10 @@ export default function TeamCanvas() {
             <div className="flex flex-wrap gap-1.5">
               <FilterPill active={filter === "all"}              count={team.length}              onClick={() => setFilter("all")}              label="All" />
               <FilterPill active={filter === "needs_attention"}  count={summary.needs_attention}   onClick={() => setFilter("needs_attention")}  label="⚠ Needs attention" tone="amber" />
+              <FilterPill active={filter === "direct"}           count={summary.direct_count}      onClick={() => setFilter("direct")}           label="Direct" />
+              {includeSkip && summary.skip_count > 0 && (
+                <FilterPill active={filter === "skip"}           count={summary.skip_count}        onClick={() => setFilter("skip")}             label="Skip-level" />
+              )}
               <FilterPill active={filter === "on_track"}         count={summary.on_track}          onClick={() => setFilter("on_track")}         label="On track" />
               <FilterPill active={filter === "behind"}           count={summary.behind}            onClick={() => setFilter("behind")}           label="Behind" />
               <FilterPill active={filter === "exploring"}        count={summary.exploring}         onClick={() => setFilter("exploring")}        label="Exploring" />
@@ -118,6 +152,82 @@ export default function TeamCanvas() {
             )}
           </section>
         </>
+      )}
+      </>
+      )}
+    </div>
+  );
+}
+
+function TabBtn({ active, onClick, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-[12px] font-semibold px-4 py-2.5 transition-all border-b-2 ${
+        active ? "border-amber-600 text-amber-700" : "border-transparent text-gray-500 hover:text-gray-700"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function OrgChartView({ orgChart, loading }) {
+  if (loading) return <p className="text-[12px] text-gray-400">Loading org chart…</p>;
+  const tree = orgChart?.tree || [];
+  if (tree.length === 0) {
+    return (
+      <section className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
+        <div className="text-[28px] mb-2">🌳</div>
+        <p className="text-[14px] font-bold text-text-primary mb-1">No org structure yet</p>
+        <p className="text-[12px] text-gray-500 leading-relaxed max-w-md mx-auto">
+          Import a CSV with <code className="text-[10px] bg-gray-100 px-1 rounded">manager_email</code> links from Admin Console → People → 📥 CSV import. Manager links resolve in a second pass, so an entire org imports in one shot.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+      <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-3">ORG TREE · {orgChart?.total_users} active users</p>
+      <div className="space-y-1">
+        {tree.map((root) => <TreeNode key={root.user_id} node={root} depth={0} />)}
+      </div>
+    </section>
+  );
+}
+
+function TreeNode({ node, depth }) {
+  const [open, setOpen] = useState(depth < 1);
+  const reports = node.reports || [];
+  const hasReports = reports.length > 0;
+  return (
+    <div>
+      <button
+        onClick={() => hasReports && setOpen(!open)}
+        className={`w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-gray-50 transition-colors ${hasReports ? "" : "cursor-default"}`}
+        style={{ paddingLeft: `${depth * 18 + 10}px` }}
+      >
+        {hasReports ? (
+          <span className={`text-[9px] text-gray-400 transition-transform ${open ? "rotate-90" : ""} shrink-0 w-3`}>▶</span>
+        ) : (
+          <span className="w-3 shrink-0" />
+        )}
+        <div className="w-7 h-7 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center text-[9px] font-bold shrink-0">
+          {(node.name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-semibold text-text-primary truncate">{node.name}</p>
+          <p className="text-[10px] text-gray-500 truncate">
+            {node.role}
+            {node.department && ` · ${node.department}`}
+          </p>
+        </div>
+        {hasReports && <span className="text-[9px] text-gray-400 font-mono">{reports.length}</span>}
+      </button>
+      {open && hasReports && (
+        <div className="border-l border-gray-100 ml-5">
+          {reports.map((kid) => <TreeNode key={kid.user_id} node={kid} depth={depth + 1} />)}
+        </div>
       )}
     </div>
   );

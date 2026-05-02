@@ -44,6 +44,7 @@ export default function PathsCanvas() {
   const [reorderingStep, setReorderingStep] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
   const [addGoalOpen, setAddGoalOpen] = useState(false);
+  const [slotPickerStep, setSlotPickerStep] = useState(null);  // step object when picker open
   // Wow-moment polish (Block 2)
   const [agentStatus, setAgentStatus] = useState(null);  // { claude: { live, mode }, perplexity_computer: { ... } }
   const [recomputeBanner, setRecomputeBanner] = useState(null);  // last diff result, dismissible
@@ -398,6 +399,42 @@ export default function PathsCanvas() {
                         {step.skipped_reason && (
                           <p className="text-[10px] text-gray-500 italic">Skipped: {step.skipped_reason}</p>
                         )}
+                        {/* Existing scheduled block (if any) — render inline */}
+                        {(() => {
+                          const stepBlock = blocks.find((b) => b.path_step_id === step.id && (b.status === "scheduled" || b.status === "rescheduled"));
+                          if (!stepBlock) return null;
+                          return (
+                            <div className="flex items-center gap-2 px-3 py-2 -mx-2 rounded-md bg-blue-50/60 border border-blue-200">
+                              <span className="text-[14px] leading-none">📅</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-semibold text-text-primary leading-tight">
+                                  Scheduled · {fmtBlockTime(stepBlock.start_at, stepBlock.end_at)}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {stepBlock.calendar_event_url && (
+                                    <a href={stepBlock.calendar_event_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-700 hover:underline">
+                                      Open in Calendar ↗
+                                    </a>
+                                  )}
+                                  <button
+                                    onClick={async () => {
+                                      if (!window.confirm("Cancel this scheduled session?")) return;
+                                      setStepBusy(step.id);
+                                      await agent.cancelCalendarBlock(stepBlock.block_id);
+                                      await loadBlocks();
+                                      setStepBusy(null);
+                                    }}
+                                    disabled={stepBusy === step.id}
+                                    className="text-[10px] text-gray-500 hover:text-rose-600"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* Inline actions */}
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           {(step.status === "active" || step.status === "pending") && (
@@ -416,6 +453,15 @@ export default function PathsCanvas() {
                               >
                                 Skip
                               </button>
+                              {!blocks.some((b) => b.path_step_id === step.id && (b.status === "scheduled" || b.status === "rescheduled")) && (
+                                <button
+                                  onClick={() => setSlotPickerStep(step)}
+                                  disabled={stepBusy === step.id}
+                                  className="text-[11px] font-semibold border border-blue-300 text-blue-700 hover:bg-blue-50 rounded-md px-2.5 py-1 transition-colors"
+                                >
+                                  📅 Schedule
+                                </button>
+                              )}
                             </>
                           )}
                           {reorderingStep === step.id ? (
@@ -489,6 +535,19 @@ export default function PathsCanvas() {
         <AddGoalModal
           onClose={() => setAddGoalOpen(false)}
           onCreate={handleCreateGoal}
+        />
+      )}
+
+      {slotPickerStep && (
+        <SlotPickerModal
+          step={slotPickerStep}
+          userId={userId}
+          goalId={activeGoalId}
+          onClose={() => setSlotPickerStep(null)}
+          onBooked={async () => {
+            await loadBlocks();
+            setSlotPickerStep(null);
+          }}
         />
       )}
     </div>
@@ -603,6 +662,182 @@ function RecomputeBanner({ banner, onDismiss }) {
     </div>
   );
 }
+
+/**
+ * SlotPickerModal — pick a calendar slot to time-block a path step.
+ *
+ * Walks the user through:
+ *   1. Loading 3 free-slot suggestions from /calendar/find_slots
+ *      (durations match the step's estimated_minutes)
+ *   2. Picking one (or hitting "Refresh" to re-roll)
+ *   3. Confirming → /calendar/book → block row created → calendar event
+ *      generated when Google integration is live (stub when not)
+ * Closes on success and triggers a path/blocks reload via onBooked().
+ */
+function SlotPickerModal({ step, userId, goalId, onClose, onBooked }) {
+  const [slots, setSlots] = useState(null);  // null = loading; [] = no free slots; [s,...] = options
+  const [error, setError] = useState(null);
+  const [picked, setPicked] = useState(null);  // chosen slot
+  const [booking, setBooking] = useState(false);
+  const durationMin = step.estimated_minutes || 30;
+
+  // Esc closes
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape" && !booking) onClose(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, booking]);
+
+  async function loadSlots() {
+    setSlots(null);
+    setError(null);
+    setPicked(null);
+    const res = await agent.findCalendarSlots(userId, { durationMin, count: 3 });
+    if (res?.error) { setError(res.error); setSlots([]); return; }
+    setSlots(res?.slots || []);
+  }
+
+  useEffect(() => { loadSlots(); }, []);
+
+  async function handleBook() {
+    if (!picked) return;
+    setBooking(true);
+    const res = await agent.bookCalendarSlot({
+      userId,
+      goalId,
+      pathStepId: step.id,
+      stepTitle: step.title,
+      startAt: picked.start_at,
+      endAt: picked.end_at,
+      description: step.content_url ? `Resource: ${step.content_url}` : undefined,
+    });
+    setBooking(false);
+    if (res?.error) { setError(res.error); return; }
+    onBooked();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-[14vh]"
+      onClick={booking ? undefined : onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[92vw] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-blue-700">📅 SCHEDULE STEP</p>
+            <p className="text-[14px] font-bold text-text-primary mt-0.5 line-clamp-1">{step.title}</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">{durationMin} min · pick a slot from your calendar</p>
+          </div>
+          {!booking && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-[18px]" title="Close (Esc)">✕</button>
+          )}
+        </div>
+
+        <div className="p-5 space-y-3">
+          {slots === null && (
+            <div className="py-8 text-center">
+              <div className="inline-flex items-center gap-2 text-[12px] text-gray-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse inline-block" />
+                Reading your calendar…
+              </div>
+            </div>
+          )}
+          {error && (
+            <p className="text-[11px] text-red-600">Error: {error}</p>
+          )}
+          {slots?.length === 0 && !error && (
+            <p className="text-[12px] text-gray-500 italic px-2 py-6 text-center">
+              No free {durationMin}-min slots in the next 7 days. Try refreshing or adjusting your calendar.
+            </p>
+          )}
+          {slots && slots.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold tracking-wider text-gray-400 mb-1">SUGGESTED SLOTS</p>
+              {slots.map((s, i) => {
+                const active = picked === s;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setPicked(s)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                      active ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100" : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-semibold text-text-primary">
+                          {s.day || fmtSlotDay(s.start_at)} · {s.time || fmtSlotTime(s.start_at, s.end_at)}
+                        </p>
+                        {s.fit_label && (
+                          <p className="text-[10px] text-gray-500 mt-0.5">{s.fit_label}</p>
+                        )}
+                      </div>
+                      {active && <span className="text-[14px] text-blue-600">✓</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100">
+          <button
+            onClick={loadSlots}
+            disabled={slots === null || booking}
+            className="text-[11px] text-gray-600 hover:text-gray-900 disabled:text-gray-300"
+          >
+            ↻ Refresh slots
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              disabled={booking}
+              className="text-[12px] text-gray-600 hover:text-gray-900 px-3 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleBook}
+              disabled={!picked || booking}
+              className={`text-[12px] font-semibold rounded-md px-4 py-2 transition-colors ${
+                !picked || booking
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {booking ? "Booking…" : "Book this slot →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function fmtSlotDay(iso) {
+  try {
+    const d = new Date(iso);
+    const today = new Date();
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    if (d.toDateString() === today.toDateString()) return "Today";
+    if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  } catch { return iso; }
+}
+
+function fmtSlotTime(startIso, endIso) {
+  try {
+    const s = new Date(startIso);
+    const e = new Date(endIso);
+    const fmt = (x) => x.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `${fmt(s)} – ${fmt(e)}`;
+  } catch { return ""; }
+}
+
 
 /**
  * Sequenced progress UI shown inside AddGoalModal while the backend is

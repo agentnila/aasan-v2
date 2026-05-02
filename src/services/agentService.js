@@ -1219,6 +1219,93 @@ export async function listScheduleBlocks(userId, { includePast = false } = {}) {
   }
 }
 
+/**
+ * Find candidate learning slots in the learner's calendar for a given duration.
+ * Returns a list of slots with day/time labels + fit-rank metadata.
+ *
+ *   findCalendarSlots(userId, { durationMin: 30, count: 3, rhythm: 'morning' })
+ *   → { slots: [{start_at, end_at, day, time, label, fit_score, ...}], modes }
+ */
+export async function findCalendarSlots(userId, {
+  durationMin = 30,
+  count = 3,
+  windowStart,
+  windowEnd,
+  rhythm,
+} = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/calendar/find_slots`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: userId,
+        duration_min: durationMin,
+        count,
+        window_start: windowStart,
+        window_end: windowEnd,
+        rhythm,
+      }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, slots: [] }
+  }
+}
+
+/**
+ * Book a slot. Creates the calendar event + a schedule_blocks row tied
+ * to the path step. The block_id returned is what the frontend uses to
+ * render the inline "📅 Scheduled: ..." badge and to support reschedule
+ * / cancel later.
+ */
+export async function bookCalendarSlot({
+  userId,
+  goalId,
+  pathStepId,
+  stepTitle,
+  startAt,
+  endAt,
+  description,
+}) {
+  if (!userId) return { error: 'user_id required' }
+  if (!startAt || !endAt) return { error: 'start_at and end_at required' }
+  try {
+    const res = await fetch(`${RENDER_URL}/calendar/book`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: userId,
+        goal_id: goalId,
+        path_step_id: pathStepId,
+        step_title: stepTitle,
+        start_at: startAt,
+        end_at: endAt,
+        description,
+      }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+/**
+ * Cancel a previously booked block. Removes the calendar event and flips
+ * the block to cancelled.
+ */
+export async function cancelCalendarBlock(blockId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/calendar/cancel`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ block_id: blockId }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
 export async function createGoal(userId, goal) {
   if (!userId) return { error: 'user_id required' }
   if (!goal?.name?.trim?.()) return { error: 'goal.name required' }
@@ -1650,6 +1737,9 @@ const agent = {
   skipStep,
   reorderStep,
   listScheduleBlocks,
+  findCalendarSlots,
+  bookCalendarSlot,
+  cancelCalendarBlock,
   getContentCoverage,
   semanticSearch,
   runDriveIndex,

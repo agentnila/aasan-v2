@@ -350,6 +350,9 @@ export default function PathsCanvas() {
                           )}
                           {isLearnerEdit && <span className="text-[9px] text-blue-600">✋ learner</span>}
                           {isManagerInsert && <span className="text-[9px] text-amber-600">👤 manager</span>}
+                          {step.content_url && (
+                            <span className="text-[9px] text-blue-600" title={step.content_provider ? `Linked to ${step.content_provider}` : "Has linked resource"}>🔗 {step.content_provider || "resource"}</span>
+                          )}
                           {isRecentlyChanged && isEngineInsert && (
                             <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-100 rounded-full px-1.5 py-0.5 animate-pulse">✨ engine just adjusted</span>
                           )}
@@ -360,6 +363,25 @@ export default function PathsCanvas() {
 
                     {isOpen && (
                       <div className="ml-9 pl-2 mr-3 mb-3 mt-1 border-l-2 border-green-200 space-y-2">
+                        {step.content_url && (
+                          <a
+                            href={step.content_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-start gap-2 px-3 py-2 -mx-2 rounded-md bg-blue-50/60 border border-blue-200 hover:bg-blue-100/60 hover:border-blue-300 transition-colors group"
+                          >
+                            <span className="text-[16px] leading-none mt-0.5">🎓</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="text-[9px] font-bold tracking-wider text-blue-700 uppercase">{step.content_provider || "Resource"}</span>
+                                <span className="text-[9px] text-blue-600 group-hover:underline">Open ↗</span>
+                              </div>
+                              <p className="text-[11px] font-semibold text-text-primary leading-snug">
+                                {step.content_title || step.title}
+                              </p>
+                            </div>
+                          </a>
+                        )}
                         {step.inserted_reason && (
                           <p className="text-[11px] text-gray-600 italic">{step.inserted_reason}</p>
                         )}

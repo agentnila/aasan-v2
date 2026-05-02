@@ -172,6 +172,9 @@ export default function PathsCanvas() {
         mode: result.mode,
         changePct: result.change_pct,
         requiresConfirmation: result.requires_confirmation,
+        readinessBefore: result.readiness_before,
+        readinessAfter: result.readiness_after,
+        readinessDelta: result.readiness_delta,
         at: Date.now(),
       });
 
@@ -292,11 +295,12 @@ export default function PathsCanvas() {
               <button
                 onClick={handleRecompute}
                 disabled={recomputing}
+                title="Simulate the engine's response to a 'I just finished a session' event — Claude reasons over your current path, recent activity, and goal, then proposes step changes (add a refresher, mark current done, etc.) and recomputes your readiness score."
                 className={`text-[11px] font-semibold rounded-md px-2.5 py-1 transition-colors ${
                   recomputing ? "bg-gray-100 text-gray-400 cursor-wait" : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
                 }`}
               >
-                {recomputing ? "Recomputing…" : "⚡ Trigger recompute"}
+                {recomputing ? "Engine running…" : "▶ Simulate session complete"}
               </button>
             </div>
           </div>
@@ -572,6 +576,13 @@ function RecomputeBanner({ banner, onDismiss }) {
           {typeof banner.changePct === "number" && (
             <span className="text-[9px] text-gray-500">
               {Math.round(banner.changePct * 100)}% of pending changed
+            </span>
+          )}
+          {typeof banner.readinessDelta === "number" && banner.readinessDelta !== 0 && (
+            <span className={`text-[9px] font-semibold rounded-full px-1.5 py-0.5 ${
+              banner.readinessDelta > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+            }`}>
+              Readiness {banner.readinessBefore} → {banner.readinessAfter} ({banner.readinessDelta > 0 ? "+" : ""}{banner.readinessDelta})
             </span>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import agent from "../../services/agentService";
 
 /**
@@ -233,7 +233,148 @@ export default function LibraryCanvas() {
           </div>
         </section>
       )}
+
+      <CatalogBrowser />
     </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// Catalog browser — reads the CSV-imported content_index (V2 Table 03).
+// Read-only here; admins manage the catalog from AdminCanvas → Content Library.
+// Path Engine reads from this same catalog when generating paths (RAG).
+// ─────────────────────────────────────────────
+function CatalogBrowser() {
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [facets, setFacets] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [source, setSource] = useState("");
+  const [difficulty, setDifficulty] = useState("");
+  const [freeOnly, setFreeOnly] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    const res = await agent.searchContent({
+      query: search || undefined,
+      source: source || undefined,
+      difficulty: difficulty || undefined,
+      isFree: freeOnly ? true : undefined,
+      mode: "browse",
+      limit: 100,
+    });
+    setItems(res?.items || []);
+    setTotal(res?.total || 0);
+    setFacets(res?.facets?.by_source || {});
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [search, source, difficulty, freeOnly]);
+
+  const sourceOptions = useMemo(
+    () => Object.entries(facets).sort(([, a], [, b]) => b - a),
+    [facets],
+  );
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+      <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <p className="text-[10px] text-gray-400 font-semibold tracking-wider">CATALOG · CURATED LEARNING SOURCES</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">CSV-imported catalog. The Path Engine pulls from this when designing paths.</p>
+        </div>
+        <p className="text-[10px] text-gray-400 font-mono">{total} item{total !== 1 ? "s" : ""}</p>
+      </div>
+
+      {/* Filter strip */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search catalog… (e.g. 'rag agents')"
+          className="flex-1 min-w-[200px] px-3 py-1.5 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-emerald-400"
+        />
+        <select
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          className="px-2 py-1.5 text-[11px] border border-gray-200 rounded-md bg-white"
+        >
+          <option value="">All sources</option>
+          {sourceOptions.map(([s, n]) => (
+            <option key={s} value={s}>{s} ({n})</option>
+          ))}
+        </select>
+        <select
+          value={difficulty}
+          onChange={(e) => setDifficulty(e.target.value)}
+          className="px-2 py-1.5 text-[11px] border border-gray-200 rounded-md bg-white"
+        >
+          <option value="">Any level</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert</option>
+        </select>
+        <label className="text-[11px] flex items-center gap-1.5 text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={freeOnly}
+            onChange={(e) => setFreeOnly(e.target.checked)}
+            className="accent-emerald-600"
+          />
+          Free only
+        </label>
+      </div>
+
+      {/* Items */}
+      {loading && <p className="text-[12px] text-gray-400 italic px-2 py-3">Loading catalog…</p>}
+      {!loading && items.length === 0 && (
+        <p className="text-[12px] text-gray-400 italic px-2 py-3">
+          No matches. {total === 0 && <>The catalog is empty — admins can bootstrap from <code>seed_data/aasan_content_seed_v1.csv</code> in Admin → Content Library.</>}
+        </p>
+      )}
+      {items.length > 0 && (
+        <div className="space-y-1.5">
+          {items.map((it) => (
+            <a
+              key={it.content_id}
+              href={it.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="block px-3 py-2 rounded-lg border border-gray-100 hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors"
+            >
+              <div className="flex items-baseline gap-2">
+                <span className="text-[12px] font-semibold text-text-primary truncate flex-1">{it.title}</span>
+                <span className="text-[9px] text-gray-400 shrink-0">{it.source}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {it.difficulty && (
+                  <span className="text-[9px] bg-gray-100 text-gray-700 rounded-full px-1.5 py-0.5 capitalize">{it.difficulty}</span>
+                )}
+                <span className="text-[9px] text-gray-500">{it.content_type}</span>
+                {it.duration_minutes > 0 && (
+                  <span className="text-[9px] text-gray-400 font-mono">{it.duration_minutes}m</span>
+                )}
+                <span className={`text-[9px] font-semibold ${it.is_free ? "text-emerald-600" : "text-amber-600"}`}>
+                  {it.is_free ? "FREE" : "PAID"}
+                </span>
+                {it.embedding_id && <span className="text-[9px] text-purple-500">🟢 indexed</span>}
+              </div>
+              {it.skills && it.skills.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {it.skills.slice(0, 5).map((s) => (
+                    <span key={s} className="text-[9px] text-gray-500">#{s}</span>
+                  ))}
+                  {it.skills.length > 5 && <span className="text-[9px] text-gray-400">+{it.skills.length - 5}</span>}
+                </div>
+              )}
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

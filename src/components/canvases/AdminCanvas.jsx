@@ -131,6 +131,7 @@ export default function AdminCanvas() {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-gray-200">
         <Tab active={tab === "people"}      onClick={() => setTab("people")}     label="👥 People"   count={users?.total} />
+        <Tab active={tab === "content"}     onClick={() => setTab("content")}    label="📚 Content Library" />
         <Tab active={tab === "reports"}     onClick={() => setTab("reports")}    label="📊 Reports" />
         <Tab active={tab === "heatmap"}     onClick={() => setTab("heatmap")}    label="🌡 Skill heatmap" />
         <Tab active={tab === "onboarding"}  onClick={() => setTab("onboarding")} label="🎓 Onboarding" />
@@ -319,6 +320,7 @@ export default function AdminCanvas() {
         </>
       )}
 
+      {tab === "content" && <ContentLibraryTab actorId={actorId} />}
       {tab === "reports" && <ReportsTab actorId={actorId} />}
       {tab === "heatmap" && <SkillHeatmapTab actorId={actorId} />}
       {tab === "onboarding" && <OnboardingTab actorId={actorId} />}
@@ -1349,6 +1351,381 @@ function ConnField({ label, value, mono = false }) {
       <button onClick={copy} className="text-[10px] text-rose-600 hover:text-rose-800 shrink-0">
         {copied ? "✓" : "Copy"}
       </button>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// Content Library — admin upload + browse
+// ─────────────────────────────────────────────
+
+function ContentLibraryTab({ actorId }) {
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [facets, setFacets] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [filterSource, setFilterSource] = useState("");
+  const [filterDifficulty, setFilterDifficulty] = useState("");
+  const [filterFree, setFilterFree] = useState("");  // "" / "free" / "paid"
+  const [searchTerm, setSearchTerm] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
+
+  async function load() {
+    setLoading(true);
+    const res = await agent.adminContentList(actorId, {
+      source: filterSource || undefined,
+      difficulty: filterDifficulty || undefined,
+      isFree: filterFree === "" ? undefined : (filterFree === "free"),
+      search: searchTerm || undefined,
+      limit: 200,
+    });
+    setItems(res?.items || []);
+    setTotal(res?.total || 0);
+    setFacets(res?.facets?.by_source || {});
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filterSource, filterDifficulty, filterFree, searchTerm]);
+
+  async function handleLoadSeed() {
+    if (!window.confirm("Bootstrap the catalog from seed_data/aasan_content_seed_v1.csv? Idempotent — re-running just refreshes existing rows.")) return;
+    setSeeding(true);
+    const res = await agent.adminContentLoadSeed(actorId);
+    setSeeding(false);
+    setSeedResult(res);
+    await load();
+  }
+
+  async function handleEmbedPending() {
+    setSeeding(true);
+    const res = await agent.adminContentEmbedPending(actorId, 200);
+    setSeeding(false);
+    setSeedResult({ ...res, _label: "embedded" });
+    await load();
+  }
+
+  async function handleDelete(item) {
+    if (!window.confirm(`Remove "${item.title}" from the catalog?`)) return;
+    await agent.adminContentDelete(actorId, item.content_id);
+    await load();
+  }
+
+  return (
+    <section className="space-y-4">
+      {/* Header + actions */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-[15px] font-bold text-text-primary">📚 Content Library</h2>
+          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl leading-relaxed">
+            The unified catalog of every learning resource the Path Engine can pull from.
+            Upload your LMS catalog as CSV — the engine will use these resources when designing paths
+            (RAG: similarity-search candidates → Claude SELECTS for each goal).
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="text-[12px] font-semibold rounded-md px-3 py-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+          >
+            ⬆ Upload CSV
+          </button>
+          <a
+            href={agent.adminContentTemplateUrl()}
+            className="text-[12px] font-semibold rounded-md px-3 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            ↓ Template
+          </a>
+          <button
+            onClick={handleLoadSeed}
+            disabled={seeding}
+            className="text-[12px] font-semibold rounded-md px-3 py-2 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-60 transition-colors"
+            title="Bootstrap the catalog with the bundled seed file (~70 well-known courses)"
+          >
+            🌱 Load seed
+          </button>
+          <button
+            onClick={handleEmbedPending}
+            disabled={seeding}
+            className="text-[12px] font-semibold rounded-md px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-60 transition-colors"
+            title="Re-run vector embedding on any rows where embedding_id IS NULL"
+          >
+            ✨ Embed pending
+          </button>
+        </div>
+      </div>
+
+      {seedResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-[12px] text-emerald-800">
+          {seedResult._label === "embedded" ? (
+            <>Embedded {seedResult.embedded || 0} of {seedResult.processed || 0} rows; {seedResult.failed || 0} failed.</>
+          ) : (
+            <>
+              Imported {seedResult.rows_processed || 0} rows · {seedResult.inserted || 0} new · {seedResult.updated || 0} updated · {seedResult.embedded || 0} embedded
+              {(seedResult.errors || []).length > 0 && <span className="text-amber-700"> · {seedResult.errors.length} errors</span>}
+            </>
+          )}
+          <button onClick={() => setSeedResult(null)} className="ml-2 text-emerald-600 hover:text-emerald-900">✕</button>
+        </div>
+      )}
+
+      {/* Stats strip */}
+      <div className="grid grid-cols-4 gap-3">
+        <Stat label="Catalog total" value={total} />
+        <Stat label="Sources" value={Object.keys(facets).length} />
+        <Stat label="Free" value={items.filter(i => i.is_free).length} />
+        <Stat label="Indexed in Pinecone" value={items.filter(i => i.embedding_id).length} />
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-2 flex-wrap">
+        <input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search title / description / skills…"
+          className="flex-1 min-w-[200px] px-3 py-1.5 text-[12px] border border-gray-200 rounded-md focus:outline-none focus:border-emerald-400"
+        />
+        <select
+          value={filterSource}
+          onChange={(e) => setFilterSource(e.target.value)}
+          className="px-2 py-1.5 text-[11px] border border-gray-200 rounded-md bg-white"
+        >
+          <option value="">All sources</option>
+          {Object.keys(facets).sort().map((s) => (
+            <option key={s} value={s}>{s} ({facets[s]})</option>
+          ))}
+        </select>
+        <select
+          value={filterDifficulty}
+          onChange={(e) => setFilterDifficulty(e.target.value)}
+          className="px-2 py-1.5 text-[11px] border border-gray-200 rounded-md bg-white"
+        >
+          <option value="">Any level</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert</option>
+        </select>
+        <select
+          value={filterFree}
+          onChange={(e) => setFilterFree(e.target.value)}
+          className="px-2 py-1.5 text-[11px] border border-gray-200 rounded-md bg-white"
+        >
+          <option value="">Free + paid</option>
+          <option value="free">Free only</option>
+          <option value="paid">Paid only</option>
+        </select>
+      </div>
+
+      {/* Table */}
+      {loading && <p className="text-[12px] text-gray-400">Loading catalog…</p>}
+      {!loading && items.length === 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
+          <p className="text-[13px] text-gray-500">No content matches these filters.</p>
+          {total === 0 && (
+            <p className="text-[11px] text-gray-400 mt-2">
+              Catalog is empty. Click "🌱 Load seed" above to bootstrap with ~70 curated entries, or "⬆ Upload CSV" to import your own.
+            </p>
+          )}
+        </div>
+      )}
+      {!loading && items.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full text-[11px]">
+            <thead className="bg-gray-50">
+              <tr className="text-left">
+                <th className="px-3 py-2 font-semibold text-gray-600">Title</th>
+                <th className="px-3 py-2 font-semibold text-gray-600">Source</th>
+                <th className="px-3 py-2 font-semibold text-gray-600">Type</th>
+                <th className="px-3 py-2 font-semibold text-gray-600">Skills</th>
+                <th className="px-3 py-2 font-semibold text-gray-600">Level</th>
+                <th className="px-3 py-2 font-semibold text-gray-600">Free?</th>
+                <th className="px-3 py-2 font-semibold text-gray-600">Min</th>
+                <th className="px-3 py-2 font-semibold text-gray-600">Vec</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.content_id} className="border-t border-gray-100 hover:bg-emerald-50/30">
+                  <td className="px-3 py-2">
+                    <a href={it.source_url} target="_blank" rel="noreferrer" className="text-text-primary hover:text-emerald-700 hover:underline font-semibold">
+                      {it.title}
+                    </a>
+                    {it.description && (
+                      <p className="text-[10px] text-gray-500 line-clamp-1 mt-0.5">{it.description}</p>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600">{it.source}</td>
+                  <td className="px-3 py-2 text-gray-600">{it.content_type}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-0.5">
+                      {(it.skills || []).slice(0, 3).map((s) => (
+                        <span key={s} className="text-[9px] bg-gray-100 text-gray-700 rounded-full px-1.5 py-0.5">{s}</span>
+                      ))}
+                      {(it.skills || []).length > 3 && (
+                        <span className="text-[9px] text-gray-400">+{it.skills.length - 3}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-gray-600">{it.difficulty || "—"}</td>
+                  <td className="px-3 py-2">{it.is_free ? "✅" : "💲"}</td>
+                  <td className="px-3 py-2 font-mono text-gray-500">{it.duration_minutes}</td>
+                  <td className="px-3 py-2">{it.embedding_id ? "🟢" : "⚪"}</td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => handleDelete(it)} className="text-[10px] text-gray-400 hover:text-rose-600">✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {uploadOpen && (
+        <ContentUploadModal
+          actorId={actorId}
+          onClose={() => setUploadOpen(false)}
+          onUploaded={async (result) => {
+            setSeedResult(result);
+            setUploadOpen(false);
+            await load();
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+
+function ContentUploadModal({ actorId, onClose, onUploaded }) {
+  const [csvText, setCsvText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape" && !submitting) onClose(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, submitting]);
+
+  async function handleFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) {
+      setError("File too large — max 5 MB");
+      return;
+    }
+    setError(null);
+    const txt = await f.text();
+    setCsvText(txt);
+  }
+
+  async function submit() {
+    if (!csvText.trim()) { setError("Paste CSV or upload a file first"); return; }
+    setSubmitting(true);
+    const res = await agent.adminContentImportCsv(actorId, csvText);
+    setSubmitting(false);
+    if (res?.error) { setError(res.error); return; }
+    onUploaded(res);
+  }
+
+  // Quick parse preview — first 5 rows
+  const preview = useMemo(() => {
+    if (!csvText.trim()) return null;
+    const lines = csvText.trim().split("\n");
+    const header = (lines[0] || "").split(",").map((s) => s.trim());
+    const rows = lines.slice(1, 6).map((l) => l.split(",").map((s) => s.trim()));
+    return { header, rows, totalLines: lines.length - 1 };
+  }, [csvText]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-[8vh]"
+      onClick={submitting ? undefined : onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-[720px] max-w-[92vw] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700">⬆ UPLOAD CONTENT</p>
+            <p className="text-[14px] font-bold text-text-primary mt-0.5">Bulk import from your LMS catalog</p>
+          </div>
+          {!submitting && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-[18px]">✕</button>
+          )}
+        </div>
+
+        <div className="p-5 space-y-3">
+          <div>
+            <p className="text-[11px] font-semibold text-gray-700 mb-1">📄 File upload (.csv, ≤ 5 MB)</p>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleFile}
+              className="text-[11px]"
+            />
+          </div>
+
+          <div className="text-[10px] text-gray-400 text-center">— or —</div>
+
+          <div>
+            <p className="text-[11px] font-semibold text-gray-700 mb-1">📝 Paste CSV directly</p>
+            <textarea
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+              rows={8}
+              placeholder={"external_id,source,title,source_url,content_type,duration_minutes,description,skills,prerequisites,difficulty,is_free,language\nNVIDIA-DLI-001,NVIDIA DLI,Building RAG Agents,https://...,course,480,...,..."}
+              className="w-full px-3 py-2 rounded-md border border-gray-200 text-[11px] font-mono focus:outline-none focus:border-emerald-400 resize-y"
+            />
+          </div>
+
+          {preview && (
+            <div className="border border-gray-200 rounded-md p-3 bg-gray-50/40">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Preview — first {preview.rows.length} of {preview.totalLines} rows
+              </p>
+              <div className="text-[10px] text-gray-700 overflow-x-auto">
+                <p className="font-mono text-gray-500 mb-1">{preview.header.join(" · ")}</p>
+                {preview.rows.map((r, i) => (
+                  <p key={i} className="font-mono truncate text-gray-700 mt-0.5">{r.slice(0, 4).join(" · ")} …</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && <p className="text-[11px] text-red-600">{error}</p>}
+
+          <p className="text-[10px] text-gray-500 italic">
+            Format: <code>external_id,source,title,source_url,content_type</code> required.
+            Optional: <code>duration_minutes, description, skills, prerequisites, difficulty, is_free, language</code>.
+            Idempotent on (source, external_id) — re-uploads update.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="text-[12px] text-gray-600 hover:text-gray-900 px-3 py-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={!csvText.trim() || submitting}
+            className={`text-[12px] font-semibold rounded-md px-4 py-2 transition-colors ${
+              !csvText.trim() || submitting ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-700"
+            }`}
+          >
+            {submitting ? "Importing…" : "Import →"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

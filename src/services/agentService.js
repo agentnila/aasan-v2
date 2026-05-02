@@ -1795,4 +1795,107 @@ const agent = {
   adminScimSyncLog,
 }
 
+// ─────────────────────────────────────────────
+// Content Library — admin upload + read-only browse
+// ─────────────────────────────────────────────
+
+export async function adminContentList(actorUserId, { source, difficulty, contentType, isFree, search, needsEmbedding, limit = 100, offset = 0 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/content/list`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ source, difficulty, content_type: contentType, is_free: isFree, search, needs_embedding: needsEmbedding, limit, offset }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, items: [], total: 0 }
+  }
+}
+
+export async function adminContentImportCsv(actorUserId, csvText) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/content/import_csv`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ csv_text: csvText }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function adminContentLoadSeed(actorUserId, seedPath) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/content/load_seed`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify(seedPath ? { seed_path: seedPath } : {}),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function adminContentDelete(actorUserId, contentId) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/content/delete`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ content_id: contentId }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export async function adminContentEmbedPending(actorUserId, limit = 200) {
+  try {
+    const res = await fetch(`${RENDER_URL}/admin/content/embed_pending`, {
+      method: 'POST',
+      headers: { ...headers, 'X-Aasan-User': actorUserId || 'demo-user' },
+      body: JSON.stringify({ limit }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
+export function adminContentTemplateUrl() {
+  return `${RENDER_URL}/admin/content/csv_template`
+}
+
+/**
+ * Learner-facing search of the content catalog. Used by LibraryCanvas + Path
+ * Engine's RAG-augmented generation when it lands.
+ *   mode='browse'   → standard list_for_browse with filters
+ *   mode='retrieve' → vector similarity search
+ */
+export async function searchContent({ query, source, difficulty, contentType, isFree, mode = 'browse', limit = 100, offset = 0, topK = 30 } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/content/search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, source, difficulty, content_type: contentType, is_free: isFree, mode, limit, offset, top_k: topK }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message, items: [], total: 0 }
+  }
+}
+
+const _agentExtras = {
+  adminContentList,
+  adminContentImportCsv,
+  adminContentLoadSeed,
+  adminContentDelete,
+  adminContentEmbedPending,
+  adminContentTemplateUrl,
+  searchContent,
+}
+Object.assign(agent, _agentExtras)
+
 export default agent

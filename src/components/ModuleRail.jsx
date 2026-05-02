@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useUser, useClerk } from "@clerk/clerk-react";
 import agent from "../services/agentService";
 
@@ -27,6 +27,7 @@ const MODULES = [
 export default function ModuleRail() {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -127,14 +128,21 @@ export default function ModuleRail() {
         </button>
 
         {menuOpen && (
-          <div className="absolute bottom-0 left-full ml-2 bg-white border border-gray-200 rounded-xl shadow-xl py-1 min-w-[180px] z-50">
+          <div className="absolute bottom-0 left-full ml-2 bg-white border border-gray-200 rounded-xl shadow-xl py-1 min-w-[200px] z-50">
             <div className="px-3 py-2 border-b border-gray-100">
               <p className="text-[12px] font-semibold text-text-primary truncate">{user?.fullName || user?.firstName || "Signed in"}</p>
               <p className="text-[10px] text-gray-500 truncate">{user?.primaryEmailAddress?.emailAddress || ""}</p>
             </div>
             <button
+              onClick={() => { setMenuOpen(false); navigate("/profile"); }}
+              className="w-full text-left text-[12px] px-3 py-2 hover:bg-gray-50 text-gray-700 flex items-center gap-2"
+            >
+              <span>👤</span>
+              <span>View profile</span>
+            </button>
+            <button
               onClick={() => { setMenuOpen(false); signOut?.(); }}
-              className="w-full text-left text-[12px] px-3 py-2 hover:bg-gray-50 text-gray-700"
+              className="w-full text-left text-[12px] px-3 py-2 hover:bg-gray-50 text-gray-700 border-t border-gray-100"
             >
               Sign out
             </button>

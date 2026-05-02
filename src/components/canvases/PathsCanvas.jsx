@@ -45,6 +45,8 @@ export default function PathsCanvas() {
   const [expandedStep, setExpandedStep] = useState(null);
   const [addGoalOpen, setAddGoalOpen] = useState(false);
   const [slotPickerStep, setSlotPickerStep] = useState(null);  // step object when picker open
+  const [addStepOpen, setAddStepOpen] = useState(false);
+  const [addingStep, setAddingStep] = useState(false);
   // Wow-moment polish (Block 2)
   const [agentStatus, setAgentStatus] = useState(null);  // { claude: { live, mode }, perplexity_computer: { ... } }
   const [recomputeBanner, setRecomputeBanner] = useState(null);  // last diff result, dismissible
@@ -150,6 +152,21 @@ export default function PathsCanvas() {
     setStepBusy(null);
     setReorderingStep(null);
   }
+  async function handleAddStep(stepInput) {
+    if (addingStep || !activeGoalId) return { error: "no active goal" };
+    setAddingStep(true);
+    const result = await agent.insertStepManual(userId, activeGoalId, stepInput);
+    if (result?.error) {
+      setAddingStep(false);
+      return { error: result.error };
+    }
+    await loadPath(activeGoalId);
+    await loadGoals();
+    setAddingStep(false);
+    setAddStepOpen(false);
+    return { ok: true };
+  }
+
   async function handleRecompute() {
     if (recomputing) return;
     setRecomputing(true);
@@ -294,14 +311,14 @@ export default function PathsCanvas() {
             <div className="flex items-center gap-2">
               <ModeBadge agentStatus={agentStatus} />
               <button
-                onClick={handleRecompute}
-                disabled={recomputing}
-                title="Simulate the engine's response to a 'I just finished a session' event — Claude reasons over your current path, recent activity, and goal, then proposes step changes (add a refresher, mark current done, etc.) and recomputes your readiness score."
+                onClick={() => setAddStepOpen(true)}
+                disabled={addingStep || !activeGoalId}
+                title="Manually insert a new step into your path. The engine treats your manual edits as sacred — it won't reorder or remove them on future recomputes."
                 className={`text-[11px] font-semibold rounded-md px-2.5 py-1 transition-colors ${
-                  recomputing ? "bg-gray-100 text-gray-400 cursor-wait" : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
+                  addingStep ? "bg-gray-100 text-gray-400 cursor-wait" : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
                 }`}
               >
-                {recomputing ? "Engine running…" : "▶ Simulate session complete"}
+                + Add step
               </button>
             </div>
           </div>
@@ -550,6 +567,14 @@ export default function PathsCanvas() {
           }}
         />
       )}
+
+      {addStepOpen && activeGoalId && (
+        <AddStepModal
+          existingStepCount={pathSteps.length}
+          onClose={() => setAddStepOpen(false)}
+          onSubmit={handleAddStep}
+        />
+      )}
     </div>
   );
 }
@@ -701,14 +726,22 @@ function SlotPickerModal({ step, userId, goalId, onClose, onBooked }) {
 
   async function handleBook() {
     if (!picked) return;
+    // Backend's /calendar/find_slots returns `start` / `end` (not start_at / end_at).
+    // Resolve both shapes defensively so this never blanks out again.
+    const startAt = picked.start || picked.start_at;
+    const endAt = picked.end || picked.end_at;
+    if (!startAt || !endAt) {
+      setError("Selected slot is missing start/end times — please refresh and try again.");
+      return;
+    }
     setBooking(true);
     const res = await agent.bookCalendarSlot({
       userId,
       goalId,
       pathStepId: step.id,
       stepTitle: step.title,
-      startAt: picked.start_at,
-      endAt: picked.end_at,
+      startAt,
+      endAt,
       description: step.content_url ? `Resource: ${step.content_url}` : undefined,
     });
     setBooking(false);
@@ -758,6 +791,13 @@ function SlotPickerModal({ step, userId, goalId, onClose, onBooked }) {
               <p className="text-[10px] font-semibold tracking-wider text-gray-400 mb-1">SUGGESTED SLOTS</p>
               {slots.map((s, i) => {
                 const active = picked === s;
+                // Backend returns `start` / `end` / `fit` — resolve both legacy
+                // and current keys so this works even if the API shape evolves.
+                const startIso = s.start || s.start_at;
+                const endIso = s.end || s.end_at;
+                const fitText = s.fit || s.fit_label;
+                const dayLabel = fmtSlotDay(startIso);
+                const timeLabel = s.time || fmtSlotTime(startIso, endIso);
                 return (
                   <button
                     key={i}
@@ -769,10 +809,10 @@ function SlotPickerModal({ step, userId, goalId, onClose, onBooked }) {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-semibold text-text-primary">
-                          {s.day || fmtSlotDay(s.start_at)} · {s.time || fmtSlotTime(s.start_at, s.end_at)}
+                          {dayLabel} · {timeLabel}
                         </p>
-                        {s.fit_label && (
-                          <p className="text-[10px] text-gray-500 mt-0.5">{s.fit_label}</p>
+                        {fitText && (
+                          <p className="text-[10px] text-gray-500 mt-0.5">{fitText}</p>
                         )}
                       </div>
                       {active && <span className="text-[14px] text-blue-600">✓</span>}
@@ -818,15 +858,172 @@ function SlotPickerModal({ step, userId, goalId, onClose, onBooked }) {
   );
 }
 
+/**
+ * AddStepModal — manually insert a new step into the active path.
+ *
+ * The engine treats inserted_by='learner' steps as sacred — never
+ * reorders, modifies, or removes them on future recomputes. So this
+ * is the user's "the engine missed something I want to learn"
+ * escape hatch.
+ *
+ * Submitting calls insert_step_manual on the backend which appends
+ * the step at the next ordinal position by default.
+ */
+function AddStepModal({ existingStepCount, onClose, onSubmit }) {
+  const [title, setTitle] = useState("");
+  const [estMinutes, setEstMinutes] = useState(30);
+  const [stepType, setStepType] = useState("content");
+  const [contentUrl, setContentUrl] = useState("");
+  const [contentProvider, setContentProvider] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape" && !submitting) onClose(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, submitting]);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!title.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const result = await onSubmit({
+      title: title.trim(),
+      estimated_minutes: Number(estMinutes) || 30,
+      step_type: stepType,
+      // Insert at end by default — user can reorder via the existing UI
+      order: existingStepCount + 1,
+      inserted_reason: "Manually added by learner",
+      ...(contentUrl.trim() && { content_url: contentUrl.trim() }),
+      ...(contentProvider.trim() && { content_provider: contentProvider.trim() }),
+    });
+    setSubmitting(false);
+    if (result?.error) setError(result.error);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-[14vh]"
+      onClick={submitting ? undefined : onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[92vw] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-green-700">+ ADD A STEP</p>
+            <p className="text-[14px] font-bold text-text-primary mt-0.5">Insert a learner-defined step</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">The engine treats your manual edits as sacred — won't reorder or remove.</p>
+          </div>
+          {!submitting && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-[18px]" title="Close (Esc)">✕</button>
+          )}
+        </div>
+
+        <form onSubmit={submit} className="p-5 space-y-3">
+          <Field label="Step title" required>
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Read the Stripe API design RFC"
+              className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400"
+              required
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Estimated minutes">
+              <input
+                type="number"
+                min="5"
+                max="600"
+                value={estMinutes}
+                onChange={(e) => setEstMinutes(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400"
+              />
+            </Field>
+            <Field label="Type">
+              <select
+                value={stepType}
+                onChange={(e) => setStepType(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400 bg-white"
+              >
+                <option value="content">📄 Content</option>
+                <option value="review">✅ Review</option>
+                <option value="refresher">🔄 Refresher</option>
+                <option value="gap_closure">🩹 Gap closure</option>
+                <option value="assignment">👤 Assignment</option>
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Resource link (optional)" hint="The URL the step should take you to.">
+            <input
+              type="url"
+              value={contentUrl}
+              onChange={(e) => setContentUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400"
+            />
+          </Field>
+
+          {contentUrl && (
+            <Field label="Provider (optional)" hint="e.g. Coursera, kubernetes.io, YouTube">
+              <input
+                value={contentProvider}
+                onChange={(e) => setContentProvider(e.target.value)}
+                placeholder="kubernetes.io"
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400"
+              />
+            </Field>
+          )}
+
+          {error && <p className="text-[11px] text-red-600">{error}</p>}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="text-[12px] text-gray-600 hover:text-gray-900 px-3 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!title.trim() || submitting}
+              className={`text-[12px] font-semibold rounded-md px-4 py-2 transition-colors ${
+                !title.trim() || submitting
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+            >
+              {submitting ? "Adding…" : "Add to path →"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
 function fmtSlotDay(iso) {
+  if (!iso) return "—";
   try {
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
     const today = new Date();
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    if (d.toDateString() === today.toDateString()) return "Today";
-    if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  } catch { return iso; }
+    const dateStr = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    if (d.toDateString() === today.toDateString()) return `Today · ${dateStr.split(",")[1]?.trim() || dateStr}`;
+    if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${dateStr.split(",")[1]?.trim() || dateStr}`;
+    return dateStr;
+  } catch { return String(iso); }
 }
 
 function fmtSlotTime(startIso, endIso) {

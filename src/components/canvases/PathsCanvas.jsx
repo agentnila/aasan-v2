@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { useSearchParams } from "react-router-dom";
 import agent from "../../services/agentService";
@@ -117,7 +117,26 @@ export default function PathsCanvas() {
   );
 
   const pathSteps = path?.path?.steps || [];
+  const pathPhases = path?.path?.phases || [];
   const pathHistory = path?.path?.recompute_history || [];
+
+  // L4a — when phases exist, key the first step of each phase so we can render
+  // a phase divider row inline above it. Map: step_id → phase object.
+  const firstStepIdByPhase = useMemo(() => {
+    if (!pathPhases.length) return new Map();
+    const map = new Map();
+    const seen = new Set();
+    for (const step of pathSteps) {
+      const pid = step.phase_local_id;
+      if (!pid || seen.has(pid)) continue;
+      const phase = pathPhases.find((p) => p.phase_local_id === pid);
+      if (phase) {
+        map.set(step.id, phase);
+        seen.add(pid);
+      }
+    }
+    return map;
+  }, [pathSteps, pathPhases]);
 
   const goalBlocks = useMemo(
     () => blocks.filter((b) => {
@@ -345,8 +364,30 @@ export default function PathsCanvas() {
                   : isOpen
                     ? "border-green-300 bg-green-50/30"
                     : "border-gray-100";
+                const phaseHeader = firstStepIdByPhase.get(step.id);
                 return (
-                  <div key={step.id} className={`rounded-lg border ${wrapperBorder} transition-all`}>
+                  <React.Fragment key={step.id}>
+                    {phaseHeader && (
+                      <div className="pt-3 pb-2 px-1">
+                        <div className="flex items-baseline justify-between mb-1">
+                          <p className="text-[11px] font-bold text-navy uppercase tracking-wider">
+                            Phase {phaseHeader.order_index} · {phaseHeader.title}
+                          </p>
+                          {phaseHeader.duration_weeks && (
+                            <span className="text-[10px] text-gray-500">~{phaseHeader.duration_weeks}w</span>
+                          )}
+                        </div>
+                        {phaseHeader.rationale_md && (
+                          <p className="text-[11px] text-gray-600 italic leading-snug">{phaseHeader.rationale_md}</p>
+                        )}
+                        {phaseHeader.deliverable_md && (
+                          <p className="text-[10px] text-emerald-700 mt-1">
+                            <span className="font-semibold">Deliverable: </span>{phaseHeader.deliverable_md}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <div className={`rounded-lg border ${wrapperBorder} transition-all`}>
                     <button
                       onClick={() => setExpandedStep(isOpen ? null : step.id)}
                       className="w-full text-left px-3 py-2.5 flex items-start gap-3"
@@ -404,7 +445,12 @@ export default function PathsCanvas() {
                             </div>
                           </a>
                         )}
-                        {step.inserted_reason && (
+                        {step.step_rationale && (
+                          <p className="text-[11px] text-gray-700 leading-snug">
+                            <span className="font-semibold text-emerald-700">Why this fits: </span>{step.step_rationale}
+                          </p>
+                        )}
+                        {step.inserted_reason && step.inserted_reason !== step.step_rationale && (
                           <p className="text-[11px] text-gray-600 italic">{step.inserted_reason}</p>
                         )}
                         {step.completed_at && (
@@ -496,7 +542,8 @@ export default function PathsCanvas() {
                         </div>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </React.Fragment>
                 );
               })}
             </div>

@@ -1341,6 +1341,24 @@ export async function createGoal(userId, goal, context = null) {
   }
 }
 
+/**
+ * L5 — AI Assist for goal definition. Conversational refinement before path gen.
+ * mode='next_question' returns { question } or { done: true }
+ * mode='finalize'      returns { goal: { name, objective, success_criteria, timeline } }
+ */
+export async function goalAssist(userId, { draft = '', history = [], mode = 'next_question' } = {}) {
+  try {
+    const res = await fetch(`${RENDER_URL}/goal/assist`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_id: userId, draft, history, mode }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { error: err.message }
+  }
+}
+
 export async function listGoals(userId) {
   try {
     const res = await fetch(`${RENDER_URL}/goal/list`, {
@@ -1753,6 +1771,7 @@ const agent = {
   getSMEProfile,
   listSMEs,
   createGoal,
+  goalAssist,
   markStepDone,
   skipStep,
   reorderStep,

@@ -599,6 +599,7 @@ export default function PathsCanvas() {
         <AddGoalModal
           onClose={() => setAddGoalOpen(false)}
           onCreate={handleCreateGoal}
+          userId={userId}
         />
       )}
 
@@ -1139,7 +1140,7 @@ function GoalCreateProgress({ phase, goalName }) {
 }
 
 
-function AddGoalModal({ onClose, onCreate }) {
+function AddGoalModal({ onClose, onCreate, userId }) {
   const [name, setName] = useState("");
   const [objective, setObjective] = useState("");
   const [timeline, setTimeline] = useState("");
@@ -1149,6 +1150,80 @@ function AddGoalModal({ onClose, onCreate }) {
   const [submitPhase, setSubmitPhase] = useState(-1);  // -1 idle, 0..3 progress
   const [error, setError] = useState(null);
   const phaseTimersRef = useRef([]);
+
+  // L5 — AI Assist conversational refinement of the goal
+  const [assistMode, setAssistMode] = useState(false);  // false = form view, true = chat view
+  const [assistMessages, setAssistMessages] = useState([]);  // [{role, text}]
+  const [assistInput, setAssistInput] = useState("");
+  const [assistThinking, setAssistThinking] = useState(false);
+  const [assistError, setAssistError] = useState(null);
+
+  async function startAssist() {
+    setAssistMode(true);
+    setAssistError(null);
+    setAssistMessages([]);
+    setAssistThinking(true);
+    const result = await agent.goalAssist(userId, {
+      draft: name,
+      history: [],
+      mode: "next_question",
+    });
+    setAssistThinking(false);
+    if (result?.error) {
+      setAssistError(result.error);
+      return;
+    }
+    if (result?.question) {
+      setAssistMessages([{ role: "assistant", text: result.question }]);
+    } else if (result?.done) {
+      await finalizeAssist([]);
+    }
+  }
+
+  async function sendAssistAnswer() {
+    const text = assistInput.trim();
+    if (!text || assistThinking) return;
+    const newHistory = [...assistMessages, { role: "user", text }];
+    setAssistMessages(newHistory);
+    setAssistInput("");
+    setAssistThinking(true);
+    const result = await agent.goalAssist(userId, {
+      draft: name,
+      history: newHistory,
+      mode: "next_question",
+    });
+    setAssistThinking(false);
+    if (result?.error) {
+      setAssistError(result.error);
+      return;
+    }
+    if (result?.done) {
+      await finalizeAssist(newHistory);
+      return;
+    }
+    if (result?.question) {
+      setAssistMessages([...newHistory, { role: "assistant", text: result.question }]);
+    }
+  }
+
+  async function finalizeAssist(history) {
+    setAssistThinking(true);
+    const result = await agent.goalAssist(userId, {
+      draft: name,
+      history,
+      mode: "finalize",
+    });
+    setAssistThinking(false);
+    if (result?.error || !result?.goal) {
+      setAssistError(result?.error || "could not finalize");
+      return;
+    }
+    setName(result.goal.name || name);
+    setObjective(result.goal.objective || "");
+    setSuccessCriteria(result.goal.success_criteria || "");
+    setTimeline(result.goal.timeline || "");
+    setAssistMode(false);  // back to form, now pre-filled
+  }
 
   // Context attachment — gives Claude a real grounding signal for the path.
   // Three input modes: a URL (job posting / role description page), a
@@ -1253,9 +1328,86 @@ function AddGoalModal({ onClose, onCreate }) {
 
         {submitting ? (
           <GoalCreateProgress phase={submitPhase} goalName={name} />
+        ) : assistMode ? (
+          <div className="p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-purple-700">
+                ✨ AI ASSIST · Goal Coach
+              </p>
+              <button
+                type="button"
+                onClick={() => { setAssistMode(false); setAssistError(null); }}
+                className="text-[10px] text-gray-400 hover:text-gray-700"
+              >
+                ← back to form
+              </button>
+            </div>
+            <div className="rounded-md border border-purple-100 bg-purple-50/30 p-3 max-h-[40vh] overflow-y-auto space-y-2.5">
+              {assistMessages.length === 0 && !assistThinking && (
+                <p className="text-[12px] text-gray-500 italic">Starting conversation…</p>
+              )}
+              {assistMessages.map((m, i) => (
+                <div
+                  key={i}
+                  className={`text-[12px] leading-snug ${
+                    m.role === "assistant"
+                      ? "text-text-primary"
+                      : "text-blue-800 bg-blue-50 px-2.5 py-1.5 rounded-md inline-block max-w-full"
+                  }`}
+                >
+                  {m.role === "assistant" && <span className="text-purple-600 font-semibold mr-1.5">Aasan</span>}
+                  {m.text}
+                </div>
+              ))}
+              {assistThinking && (
+                <p className="text-[11px] text-gray-400 italic">Aasan is thinking…</p>
+              )}
+              {assistError && (
+                <p className="text-[11px] text-rose-600">Error: {assistError}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={assistInput}
+                onChange={(e) => setAssistInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAssistAnswer(); } }}
+                placeholder="Type your answer…"
+                disabled={assistThinking}
+                className="flex-1 px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-purple-400 disabled:bg-gray-50"
+              />
+              <button
+                type="button"
+                onClick={sendAssistAnswer}
+                disabled={!assistInput.trim() || assistThinking}
+                className="text-[12px] font-semibold bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-200 rounded-md px-3 py-2"
+              >
+                Send
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => finalizeAssist(assistMessages)}
+              disabled={assistMessages.length === 0 || assistThinking}
+              className="w-full text-[12px] font-semibold border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-40 rounded-md py-2"
+            >
+              I'm done — fill in the form
+            </button>
+          </div>
         ) : (
 
         <form onSubmit={submit} className="p-5 space-y-4">
+          <button
+            type="button"
+            onClick={startAssist}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100 transition-colors group"
+          >
+            <span className="text-[16px]">✨</span>
+            <span className="text-[12px] font-semibold text-purple-700 group-hover:text-purple-900">
+              Help me describe my goal
+            </span>
+            <span className="text-[10px] text-gray-500">— I'll ask a few questions</span>
+          </button>
           <Field label="Goal name" required>
             <input
               autoFocus

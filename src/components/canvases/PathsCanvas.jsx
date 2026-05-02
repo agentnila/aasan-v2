@@ -571,6 +571,62 @@ function RecomputeBanner({ banner, onDismiss }) {
   );
 }
 
+/**
+ * Sequenced progress UI shown inside AddGoalModal while the backend is
+ * generating the initial path. Backend pipeline is:
+ *   1. persist goal → 2. Claude generates 8-12 step path → 3. persist path
+ * Total is typically 8-15 seconds, dominated by the Claude generation.
+ *
+ * Phases on the frontend mirror that breakdown so the user sees what's
+ * happening instead of a single "Creating…" string.
+ */
+function GoalCreateProgress({ phase, goalName }) {
+  const phases = [
+    { label: "Saving your goal", icon: "💾" },
+    { label: "Reading your context", icon: "🧠" },
+    { label: "Engine is designing your path (Sonnet 4.5)", icon: "✨" },
+    { label: "Persisting your initial path", icon: "🗺️" },
+  ];
+  return (
+    <div className="px-5 py-8">
+      <p className="text-[11px] text-gray-500 text-center mb-4">
+        Building a tailored learning path for{" "}
+        <span className="font-semibold text-text-primary">{goalName.trim() || "your goal"}</span>
+      </p>
+      <div className="space-y-2 max-w-[340px] mx-auto">
+        {phases.map((p, i) => {
+          const isDone = i < phase;
+          const isActive = i === phase;
+          return (
+            <div
+              key={i}
+              className={`flex items-center gap-2.5 text-[12px] transition-all duration-300 ${
+                isDone ? "text-gray-400" : isActive ? "text-emerald-700" : "text-gray-300"
+              }`}
+            >
+              <span className="w-4 inline-flex justify-center items-center shrink-0">
+                {isDone ? (
+                  <span className="text-emerald-600 text-[12px] leading-none">✓</span>
+                ) : isActive ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-200 inline-block" />
+                )}
+              </span>
+              <span className="text-[13px]">{p.icon}</span>
+              <span className={`flex-1 ${isActive ? "font-semibold" : ""}`}>{p.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-gray-400 italic text-center mt-5 leading-relaxed">
+        Typically 10-15 seconds. The path is editable —<br />the engine respects manual edits as sacred.
+      </p>
+    </div>
+  );
+}
+
+
 function AddGoalModal({ onClose, onCreate }) {
   const [name, setName] = useState("");
   const [objective, setObjective] = useState("");
@@ -578,20 +634,43 @@ function AddGoalModal({ onClose, onCreate }) {
   const [successCriteria, setSuccessCriteria] = useState("");
   const [priority, setPriority] = useState("primary");
   const [submitting, setSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState(-1);  // -1 idle, 0..3 progress
   const [error, setError] = useState(null);
+  const phaseTimersRef = useRef([]);
 
-  // Esc closes
+  // Esc closes (but only when not in the middle of submitting — don't
+  // let the user accidentally cancel a path generation that's already
+  // in flight on the backend)
   useEffect(() => {
-    function onKey(e) { if (e.key === "Escape") onClose(); }
+    function onKey(e) { if (e.key === "Escape" && !submitting) onClose(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, submitting]);
+
+  useEffect(() => {
+    return () => {
+      phaseTimersRef.current.forEach(clearTimeout);
+      phaseTimersRef.current = [];
+    };
+  }, []);
 
   async function submit(e) {
     e.preventDefault();
     if (!name.trim() || submitting) return;
     setSubmitting(true);
     setError(null);
+    setSubmitPhase(0);
+
+    // Phase progression mirrors the backend pipeline: persist goal,
+    // engine generates 8-12 steps via Claude, persist path, return.
+    // Total typical latency is 8-15s; phases time out evenly.
+    phaseTimersRef.current.forEach(clearTimeout);
+    phaseTimersRef.current = [
+      setTimeout(() => setSubmitPhase((p) => Math.max(p, 1)), 1500),
+      setTimeout(() => setSubmitPhase((p) => Math.max(p, 2)), 5000),
+      setTimeout(() => setSubmitPhase((p) => Math.max(p, 3)), 12000),
+    ];
+
     const result = await onCreate({
       name: name.trim(),
       objective: objective.trim(),
@@ -599,15 +678,23 @@ function AddGoalModal({ onClose, onCreate }) {
       success_criteria: successCriteria.trim(),
       priority,
     });
+
+    phaseTimersRef.current.forEach(clearTimeout);
+    phaseTimersRef.current = [];
+    setSubmitPhase(3);  // snap to last phase so the visual completes
+
     setSubmitting(false);
-    if (result?.error) setError(result.error);
+    if (result?.error) {
+      setError(result.error);
+      setSubmitPhase(-1);
+    }
     // onClose handled by parent on success
   }
 
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-[10vh]"
-      onClick={onClose}
+      onClick={submitting ? undefined : onClose}
     >
       <div
         className="bg-white rounded-2xl shadow-2xl w-[560px] max-w-[92vw] overflow-hidden"
@@ -615,11 +702,21 @@ function AddGoalModal({ onClose, onCreate }) {
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
           <div>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-green-700">🎯 NEW GOAL</p>
-            <p className="text-[14px] font-bold text-text-primary mt-0.5">What are you working toward?</p>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-green-700">
+              {submitting ? "🪄 GENERATING YOUR PATH" : "🎯 NEW GOAL"}
+            </p>
+            <p className="text-[14px] font-bold text-text-primary mt-0.5">
+              {submitting ? "Engine is building your initial path…" : "What are you working toward?"}
+            </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-[18px]" title="Close (Esc)">✕</button>
+          {!submitting && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-[18px]" title="Close (Esc)">✕</button>
+          )}
         </div>
+
+        {submitting ? (
+          <GoalCreateProgress phase={submitPhase} goalName={name} />
+        ) : (
 
         <form onSubmit={submit} className="p-5 space-y-4">
           <Field label="Goal name" required>
@@ -701,6 +798,7 @@ function AddGoalModal({ onClose, onCreate }) {
             </div>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

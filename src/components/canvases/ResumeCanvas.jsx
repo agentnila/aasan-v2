@@ -78,6 +78,12 @@ export default function ResumeCanvas() {
   const [jobInput, setJobInput] = useState("");
   const [tailoring, setTailoring] = useState(false);
   const [tailorResult, setTailorResult] = useState(null);
+  // Phase progression for the tailor wow moment. Sonnet 4.5 + Render
+  // typically takes 20-30s; a sequenced progress UI keeps the user
+  // oriented through the wait. -1 = not running.
+  const [tailorPhase, setTailorPhase] = useState(-1);
+  const [tailorIsUrl, setTailorIsUrl] = useState(false);
+  const tailorTimersRef = useRef([]);
 
   async function loadJournal() {
     setLoading(true);
@@ -112,13 +118,49 @@ export default function ResumeCanvas() {
   async function handleTailor() {
     const text = jobInput.trim();
     if (!text) return;
+    const isUrl = /^https?:\/\//i.test(text);
     setTailoring(true);
     setTailorResult(null);
-    const isUrl = /^https?:\/\//i.test(text);
-    const result = await agent.tailorResume(userId, isUrl ? text : "", isUrl ? "" : text);
+    setTailorIsUrl(isUrl);
+    setTailorPhase(0);
+
+    // Phase progression — advances on a fixed schedule that roughly
+    // mirrors the real backend pipeline timing. If Claude responds early,
+    // we snap to the last phase briefly before showing results so the
+    // visual progression always reads as completed.
+    tailorTimersRef.current.forEach(clearTimeout);
+    tailorTimersRef.current = [
+      setTimeout(() => setTailorPhase((p) => Math.max(p, 1)), 3000),
+      setTimeout(() => setTailorPhase((p) => Math.max(p, 2)), 7000),
+      setTimeout(() => setTailorPhase((p) => Math.max(p, 3)), 18000),
+    ];
+
+    let result;
+    try {
+      result = await agent.tailorResume(userId, isUrl ? text : "", isUrl ? "" : text);
+    } catch (err) {
+      result = { error: err?.message || "Tailor request failed" };
+    }
+
+    // Cancel unfired timers; snap to "Identifying matches" briefly
+    tailorTimersRef.current.forEach(clearTimeout);
+    tailorTimersRef.current = [];
+    setTailorPhase(3);
+
+    // Tiny delay so the eye registers the final phase before results swap in
+    await new Promise((r) => setTimeout(r, 500));
     setTailorResult(result);
     setTailoring(false);
+    setTailorPhase(-1);
   }
+
+  // Clean up any in-flight phase timers if the canvas unmounts mid-tailor
+  useEffect(() => {
+    return () => {
+      tailorTimersRef.current.forEach(clearTimeout);
+      tailorTimersRef.current = [];
+    };
+  }, []);
 
   const entries = journal?.entries || [];
   const byCategory = journal?.by_category || {};
@@ -443,7 +485,7 @@ export default function ResumeCanvas() {
               <p className="text-[12px] text-gray-400 italic px-2 py-8 text-center">Paste a job and click "Tailor my resume" — Claude maps your record to the JD and surfaces the right projects + skills.</p>
             )}
             {tailoring && (
-              <p className="text-[12px] text-gray-500 px-2 py-8 text-center">Reading the JD + matching your record…</p>
+              <TailorProgress phase={tailorPhase} isUrl={tailorIsUrl} />
             )}
             {tailorResult && tailorResult.error && (
               <p className="text-[12px] text-red-600">Error: {tailorResult.error}</p>
@@ -522,6 +564,63 @@ export default function ResumeCanvas() {
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/**
+ * Sequenced progress UI for /resume/tailor. The full pipeline takes
+ * roughly 20-30s on Render (Sonnet 4.5 generating ~4K tokens of grounded
+ * analysis + cold-start lag). Showing nothing for that long reads as
+ * broken; showing a single line of text reads as boring. Four phases
+ * with per-step pulse + checkmark keeps the user oriented and turns the
+ * wait into a "look at all the work the engine is doing" moment.
+ *
+ * Phase advancement is driven by `phase` prop set by handleTailor's
+ * timer schedule. When the response actually lands, handleTailor snaps
+ * phase to 3 briefly before swapping in results — so the visual always
+ * completes cleanly regardless of real latency.
+ */
+function TailorProgress({ phase, isUrl }) {
+  const phases = [
+    { label: "Reading your journal", icon: "📓" },
+    { label: isUrl ? "Fetching the job posting" : "Parsing the job description", icon: "🔍" },
+    { label: "Tailoring with Claude (Sonnet 4.5)", icon: "✨" },
+    { label: "Identifying your strongest matches", icon: "🎯" },
+  ];
+
+  return (
+    <div className="px-2 py-6">
+      <p className="text-[10px] font-semibold tracking-wider text-emerald-700 text-center mb-4">TAILORING IN PROGRESS</p>
+      <div className="space-y-2 max-w-[300px] mx-auto">
+        {phases.map((p, i) => {
+          const isDone = i < phase;
+          const isActive = i === phase;
+          return (
+            <div
+              key={i}
+              className={`flex items-center gap-2.5 text-[12px] transition-all duration-300 ${
+                isDone ? "text-gray-400" : isActive ? "text-emerald-700" : "text-gray-300"
+              }`}
+            >
+              <span className="w-4 inline-flex justify-center items-center shrink-0">
+                {isDone ? (
+                  <span className="text-emerald-600 text-[12px] leading-none">✓</span>
+                ) : isActive ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-200 inline-block" />
+                )}
+              </span>
+              <span className="text-[13px]">{p.icon}</span>
+              <span className={`flex-1 ${isActive ? "font-semibold" : ""}`}>{p.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-gray-400 italic text-center mt-5 leading-relaxed">
+        Sonnet 4.5 is reasoning over your full journal —<br />typically 15-25 seconds end-to-end.
+      </p>
     </div>
   );
 }

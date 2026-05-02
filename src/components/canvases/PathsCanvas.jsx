@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { useSearchParams } from "react-router-dom";
 import agent from "../../services/agentService";
@@ -44,6 +44,12 @@ export default function PathsCanvas() {
   const [reorderingStep, setReorderingStep] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
   const [addGoalOpen, setAddGoalOpen] = useState(false);
+  // Wow-moment polish (Block 2)
+  const [agentStatus, setAgentStatus] = useState(null);  // { claude: { live, mode }, perplexity_computer: { ... } }
+  const [recomputeBanner, setRecomputeBanner] = useState(null);  // last diff result, dismissible
+  const [changedStepIds, setChangedStepIds] = useState(() => new Set());  // step ids to flash
+  const flashTimerRef = useRef(null);
+  const bannerTimerRef = useRef(null);
 
   // Honor ?action=create-goal deep-link (from CommandBar / direct URL)
   useEffect(() => {
@@ -84,6 +90,23 @@ export default function PathsCanvas() {
 
   useEffect(() => { loadGoals(); loadBlocks(); }, []);
   useEffect(() => { if (activeGoalId) loadPath(activeGoalId); }, [activeGoalId]);
+
+  // Fetch live/stub mode of Claude + Perplexity once per page load
+  useEffect(() => {
+    let cancelled = false;
+    agent.getServerAgentStatus({ refresh: true }).then((s) => {
+      if (!cancelled) setAgentStatus(s);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Cleanup any pending flash/banner timers on unmount
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    };
+  }, []);
 
   const activeGoal = useMemo(
     () => goals.find((g) => g.id === activeGoalId) || null,
@@ -129,7 +152,38 @@ export default function PathsCanvas() {
   async function handleRecompute() {
     if (recomputing) return;
     setRecomputing(true);
-    await agent.recomputePath(userId, activeGoalId, "session_complete");
+    const result = await agent.recomputePath(userId, activeGoalId, "session_complete");
+
+    // Capture the diff so the UI can surface what just happened
+    if (result?.diff) {
+      const added = Array.isArray(result.diff.added) ? result.diff.added : [];
+      const modified = Array.isArray(result.diff.modified) ? result.diff.modified : [];
+      const reordered = Array.isArray(result.diff.reordered) ? result.diff.reordered : [];
+      const newIds = new Set([
+        ...added.map((s) => s?.id).filter(Boolean),
+        ...modified.map((s) => s?.id).filter(Boolean),
+        ...reordered.map((s) => s?.id).filter(Boolean),
+      ]);
+      setChangedStepIds(newIds);
+      setRecomputeBanner({
+        summary: result.diff.summary || "Path adjusted.",
+        added: added.map((s) => s?.title).filter(Boolean),
+        modified: modified.map((s) => s?.id).filter(Boolean),
+        mode: result.mode,
+        changePct: result.change_pct,
+        requiresConfirmation: result.requires_confirmation,
+        at: Date.now(),
+      });
+
+      // Reset any prior timers — most-recent recompute wins
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+      // Brief flash on changed steps
+      flashTimerRef.current = setTimeout(() => setChangedStepIds(new Set()), 6000);
+      // Banner dismisses on its own after a longer beat
+      bannerTimerRef.current = setTimeout(() => setRecomputeBanner(null), 14000);
+    }
+
     await loadPath(activeGoalId);
     await loadGoals();
     setRecomputing(false);
@@ -233,16 +287,23 @@ export default function PathsCanvas() {
 
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] text-gray-400 font-semibold tracking-wider">PATH · {pathSteps.length} STEPS</p>
-            <button
-              onClick={handleRecompute}
-              disabled={recomputing}
-              className={`text-[11px] font-semibold rounded-md px-2.5 py-1 transition-colors ${
-                recomputing ? "bg-gray-100 text-gray-400 cursor-wait" : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
-              }`}
-            >
-              {recomputing ? "Recomputing…" : "⚡ Trigger recompute"}
-            </button>
+            <div className="flex items-center gap-2">
+              <ModeBadge agentStatus={agentStatus} />
+              <button
+                onClick={handleRecompute}
+                disabled={recomputing}
+                className={`text-[11px] font-semibold rounded-md px-2.5 py-1 transition-colors ${
+                  recomputing ? "bg-gray-100 text-gray-400 cursor-wait" : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
+                }`}
+              >
+                {recomputing ? "Recomputing…" : "⚡ Trigger recompute"}
+              </button>
+            </div>
           </div>
+
+          {recomputeBanner && (
+            <RecomputeBanner banner={recomputeBanner} onDismiss={() => setRecomputeBanner(null)} />
+          )}
 
           {pathLoading ? (
             <p className="text-[12px] text-gray-400">Loading path…</p>
@@ -255,8 +316,15 @@ export default function PathsCanvas() {
                 const isOpen = expandedStep === step.id;
                 const isLearnerEdit = step.inserted_by === "learner";
                 const isManagerInsert = step.inserted_by === "manager";
+                const isEngineInsert = step.inserted_by === "engine";
+                const isRecentlyChanged = changedStepIds.has(step.id);
+                const wrapperBorder = isRecentlyChanged
+                  ? "border-emerald-400 bg-emerald-50/50 ring-2 ring-emerald-200/70 path-step-flash"
+                  : isOpen
+                    ? "border-green-300 bg-green-50/30"
+                    : "border-gray-100";
                 return (
-                  <div key={step.id} className={`rounded-lg border ${isOpen ? "border-green-300 bg-green-50/30" : "border-gray-100"} transition-colors`}>
+                  <div key={step.id} className={`rounded-lg border ${wrapperBorder} transition-all`}>
                     <button
                       onClick={() => setExpandedStep(isOpen ? null : step.id)}
                       className="w-full text-left px-3 py-2.5 flex items-start gap-3"
@@ -270,7 +338,7 @@ export default function PathsCanvas() {
                         <p className={`text-[12px] font-semibold ${step.status === "skipped" ? "text-gray-400 line-through" : "text-text-primary"} truncate`}>
                           {step.title}
                         </p>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span className={`text-[9px] rounded-full px-1.5 py-0.5 font-medium ${style.bg} ${style.text}`}>
                             {step.status}
                           </span>
@@ -282,6 +350,9 @@ export default function PathsCanvas() {
                           )}
                           {isLearnerEdit && <span className="text-[9px] text-blue-600">✋ learner</span>}
                           {isManagerInsert && <span className="text-[9px] text-amber-600">👤 manager</span>}
+                          {isRecentlyChanged && isEngineInsert && (
+                            <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-100 rounded-full px-1.5 py-0.5 animate-pulse">✨ engine just adjusted</span>
+                          )}
                         </div>
                       </div>
                       <span className={`text-[9px] text-gray-400 shrink-0 transition-transform mt-1 ${isOpen ? "rotate-90" : ""}`}>▶</span>
@@ -394,6 +465,108 @@ export default function PathsCanvas() {
           onCreate={handleCreateGoal}
         />
       )}
+    </div>
+  );
+}
+
+// Inline keyframe for the recompute step-flash. Plain CSS (no animation
+// library dependency). Mounted once via a single <style> tag.
+const PATH_FLASH_STYLE = `
+@keyframes path-step-flash-keyframes {
+  0%   { box-shadow: 0 0 0 0   rgba(16,185,129,0.55); }
+  50%  { box-shadow: 0 0 0 8px rgba(16,185,129,0);    }
+  100% { box-shadow: 0 0 0 0   rgba(16,185,129,0);    }
+}
+.path-step-flash { animation: path-step-flash-keyframes 1.6s ease-in-out 2; }
+
+@keyframes recompute-banner-slide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.recompute-banner-enter { animation: recompute-banner-slide 280ms ease-out; }
+`;
+
+// Inject the stylesheet once at module load (idempotent — won't duplicate)
+if (typeof document !== "undefined" && !document.getElementById("paths-canvas-anim-style")) {
+  const el = document.createElement("style");
+  el.id = "paths-canvas-anim-style";
+  el.textContent = PATH_FLASH_STYLE;
+  document.head.appendChild(el);
+}
+
+/**
+ * Live/stub indicator for the path engine's reasoning brain.
+ * Reads `claude` and `perplexity_computer` from /agent/status.
+ * Renders nothing while the status is still loading — avoid flicker.
+ */
+function ModeBadge({ agentStatus }) {
+  if (!agentStatus) return null;
+  const claudeLive = agentStatus?.claude?.live === true;
+  const dotColor = claudeLive ? "bg-emerald-500" : "bg-gray-400";
+  const ringColor = claudeLive ? "ring-emerald-200" : "ring-gray-200";
+  const label = claudeLive ? "Engine · live" : "Engine · stub";
+  const titleAttr = claudeLive
+    ? "Path Engine reasoning runs against the live Claude API."
+    : "Path Engine is in stub mode — set ANTHROPIC_API_KEY in Render to flip live.";
+  return (
+    <span
+      title={titleAttr}
+      className="inline-flex items-center gap-1.5 text-[10px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full px-2 py-0.5"
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${claudeLive ? "animate-pulse" : ""} ring-2 ring-offset-0 ${ringColor}`} />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * "What just happened" banner — surfaces the diff returned by /path/recompute.
+ * Auto-dismisses on a timer (set in handleRecompute), but the user can also
+ * close it explicitly. Carries the live/stub mode of the recompute call so
+ * the wow moment is unambiguous.
+ */
+function RecomputeBanner({ banner, onDismiss }) {
+  if (!banner) return null;
+  const isLive = banner.mode === "live";
+  return (
+    <div
+      className={`recompute-banner-enter mb-3 rounded-xl border p-3 flex items-start gap-3 ${
+        banner.requiresConfirmation
+          ? "bg-amber-50 border-amber-300"
+          : "bg-gradient-to-r from-emerald-50 to-emerald-50/30 border-emerald-300"
+      }`}
+    >
+      <span className="text-[20px] leading-none">{banner.requiresConfirmation ? "⚠️" : "✨"}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+            {banner.requiresConfirmation ? "Engine wants confirmation" : "Path adjusted"}
+          </p>
+          <span className={`text-[9px] font-semibold rounded-full px-1.5 py-0.5 ${
+            isLive ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-600"
+          }`}>
+            {isLive ? "Claude · live" : "stub"}
+          </span>
+          {typeof banner.changePct === "number" && (
+            <span className="text-[9px] text-gray-500">
+              {Math.round(banner.changePct * 100)}% of pending changed
+            </span>
+          )}
+        </div>
+        <p className="text-[12px] text-text-primary leading-snug">{banner.summary}</p>
+        {banner.added.length > 0 && (
+          <p className="text-[11px] text-emerald-700 mt-1">
+            + inserted: {banner.added.join(" · ")}
+          </p>
+        )}
+      </div>
+      <button
+        onClick={onDismiss}
+        className="text-gray-400 hover:text-gray-700 text-[14px] shrink-0 -mt-0.5"
+        title="Dismiss"
+      >
+        ✕
+      </button>
     </div>
   );
 }

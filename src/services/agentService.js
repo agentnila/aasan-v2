@@ -1876,7 +1876,7 @@ export function adminContentTemplateUrl() {
  */
 export async function searchContent({ query, source, difficulty, contentType, isFree, mode = 'browse', limit = 100, offset = 0, topK = 30 } = {}) {
   try {
-    const res = await fetch(`${RENDER_URL}/content/search`, {
+    const res = await fetch(`${RENDER_URL}/catalog/search`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ query, source, difficulty, content_type: contentType, is_free: isFree, mode, limit, offset, top_k: topK }),

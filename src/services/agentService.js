@@ -1306,14 +1306,34 @@ export async function cancelCalendarBlock(blockId) {
   }
 }
 
-export async function createGoal(userId, goal) {
+/**
+ * Create a goal. The optional `context` parameter (or `goal.context`) is
+ * lifted out to the top-level body — the backend extractor expects it
+ * outside the `goal` block.
+ *
+ * Context shape (one of):
+ *   { url: "https://stripe.com/jobs/listing/sre" }
+ *   { raw_text: "Senior SRE — needs Kubernetes + AWS..." }
+ *   { file_b64: "...", mime_type: "application/pdf", filename: "jd.pdf" }
+ */
+export async function createGoal(userId, goal, context = null) {
   if (!userId) return { error: 'user_id required' }
   if (!goal?.name?.trim?.()) return { error: 'goal.name required' }
+  // Allow callers to pass context inline on the goal object (PathsCanvas does)
+  let payloadContext = context
+  let goalCopy = goal
+  if (!payloadContext && goal.context) {
+    const { context: c, ...rest } = goal
+    payloadContext = c
+    goalCopy = rest
+  }
   try {
+    const body = { user_id: userId, goal: goalCopy }
+    if (payloadContext) body.context = payloadContext
     const res = await fetch(`${RENDER_URL}/goal/create`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ user_id: userId, goal }),
+      body: JSON.stringify(body),
     })
     return await res.json()
   } catch (err) {

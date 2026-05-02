@@ -906,6 +906,16 @@ function AddGoalModal({ onClose, onCreate }) {
   const [error, setError] = useState(null);
   const phaseTimersRef = useRef([]);
 
+  // Context attachment — gives Claude a real grounding signal for the path.
+  // Three input modes: a URL (job posting / role description page), a
+  // file upload (PDF, doc, image of role description), or pasted raw
+  // text. Only one is used per goal; the user picks via the tab strip.
+  const [contextMode, setContextMode] = useState("none");  // 'none' | 'url' | 'file' | 'text'
+  const [contextUrl, setContextUrl] = useState("");
+  const [contextRawText, setContextRawText] = useState("");
+  const [contextFile, setContextFile] = useState(null);  // {name, mime, b64, sizeKb}
+  const [contextFileError, setContextFileError] = useState(null);
+
   // Esc closes (but only when not in the middle of submitting — don't
   // let the user accidentally cancel a path generation that's already
   // in flight on the backend)
@@ -939,12 +949,27 @@ function AddGoalModal({ onClose, onCreate }) {
       setTimeout(() => setSubmitPhase((p) => Math.max(p, 3)), 12000),
     ];
 
+    // Build context payload based on the selected input mode.
+    let context = null;
+    if (contextMode === "url" && contextUrl.trim()) {
+      context = { url: contextUrl.trim() };
+    } else if (contextMode === "file" && contextFile) {
+      context = {
+        file_b64: contextFile.b64,
+        mime_type: contextFile.mime,
+        filename: contextFile.name,
+      };
+    } else if (contextMode === "text" && contextRawText.trim()) {
+      context = { raw_text: contextRawText.trim() };
+    }
+
     const result = await onCreate({
       name: name.trim(),
       objective: objective.trim(),
       timeline: timeline.trim(),
       success_criteria: successCriteria.trim(),
       priority,
+      context,
     });
 
     phaseTimersRef.current.forEach(clearTimeout);
@@ -1039,6 +1064,118 @@ function AddGoalModal({ onClose, onCreate }) {
               className="w-full px-3 py-2 rounded-md border border-gray-200 text-[13px] focus:outline-none focus:border-green-400 resize-none"
             />
           </Field>
+
+          {/* ───── Context attachment (optional, but high-leverage) ─────
+              Attach a job posting URL, a PDF/doc with role description, an
+              image of the role, or paste raw text. Whatever you give us,
+              the engine reads it and grounds the path in that content
+              instead of generic interpretation of the goal name. */}
+          <div className="border border-blue-200 bg-blue-50/30 rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-blue-700">📎 Context (optional, but improves the path)</p>
+              {contextMode !== "none" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setContextMode("none");
+                    setContextUrl("");
+                    setContextRawText("");
+                    setContextFile(null);
+                    setContextFileError(null);
+                  }}
+                  className="text-[10px] text-gray-500 hover:text-gray-800"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-500 -mt-1">
+              Attach a target JD, role description, or project brief — the engine reads it and tailors the path to that specific content.
+            </p>
+
+            <div className="flex gap-1 text-[11px]">
+              {[
+                ["url",  "🔗 URL"],
+                ["file", "📄 File"],
+                ["text", "📝 Paste"],
+                ["none", "Skip"],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setContextMode(mode)}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                    contextMode === mode
+                      ? "bg-blue-600 text-white"
+                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {contextMode === "url" && (
+              <input
+                value={contextUrl}
+                onChange={(e) => setContextUrl(e.target.value)}
+                placeholder="https://stripe.com/jobs/listing/senior-sre"
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-[12px] focus:outline-none focus:border-blue-400"
+              />
+            )}
+
+            {contextMode === "text" && (
+              <textarea
+                value={contextRawText}
+                onChange={(e) => setContextRawText(e.target.value)}
+                placeholder="Paste the JD, role description, or project brief here…"
+                rows={4}
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-[12px] focus:outline-none focus:border-blue-400 resize-y"
+              />
+            )}
+
+            {contextMode === "file" && (
+              <div>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.gif,.webp,application/pdf,image/*,text/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) { setContextFile(null); return; }
+                    if (f.size > 5 * 1024 * 1024) {
+                      setContextFileError("File too large — max 5 MB");
+                      setContextFile(null);
+                      return;
+                    }
+                    setContextFileError(null);
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      // Strip "data:<mime>;base64," prefix to get the raw base64 string
+                      const dataUrl = String(reader.result || "");
+                      const b64 = dataUrl.split(",")[1] || "";
+                      setContextFile({
+                        name: f.name,
+                        mime: f.type || "application/octet-stream",
+                        b64,
+                        sizeKb: Math.round(f.size / 1024),
+                      });
+                    };
+                    reader.onerror = () => setContextFileError("Could not read file");
+                    reader.readAsDataURL(f);
+                  }}
+                  className="text-[11px]"
+                />
+                {contextFile && (
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    📎 {contextFile.name} · {contextFile.sizeKb} KB · {contextFile.mime}
+                  </p>
+                )}
+                {contextFileError && (
+                  <p className="text-[10px] text-red-600 mt-1">{contextFileError}</p>
+                )}
+              </div>
+            )}
+          </div>
 
           {error && <p className="text-[11px] text-red-600">{error}</p>}
 

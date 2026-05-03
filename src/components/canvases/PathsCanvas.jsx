@@ -411,6 +411,12 @@ export default function PathsCanvas() {
                           {step.estimated_minutes && (
                             <span className="text-[9px] text-gray-400">{step.estimated_minutes}m</span>
                           )}
+                          {step.is_free === true && (
+                            <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5" title="Free resource">FREE</span>
+                          )}
+                          {step.is_free === false && (
+                            <span className="text-[9px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5" title="Paid resource">$ PAID</span>
+                          )}
                           {step.mastery_at_completion != null && (
                             <span className="text-[9px] text-emerald-600">⭐ {(step.mastery_at_completion * 100).toFixed(0)}%</span>
                           )}
